@@ -7,7 +7,7 @@ This repository documents an **end-to-end AWS FinOps investigation** into a **17
 **What happened**
 - Total AWS spend: **$315**
 - Spend visible to Finance via required allocation tags: **$260**
-- **$53 (17%)** of spend was billed correctly but **invisible to allocation reports**
+- **$53 (~17%)** of spend was billed correctly but **invisible to allocation reports**
 - Finance could not reliably allocate costs by Environment, Project, or Owner
 
 **How I investigated**
@@ -53,8 +53,8 @@ The goal is to demonstrate **how I investigate, reason, and design controls**, n
 | Invoice Validation | Confirm billing accuracy   | Cost Explorer, CUR  | Ruled out billing error  |
 | Resource Isolation | Identify unallocated spend | Athena (CUR)        | Isolated EC2 & S3 gaps   |
 | Forensics          | Identify creation source   | CloudTrail          | Found untagged API calls |
-| Scope Expansion    | Check other services       | Athena (CUR)        | Confirmed S3 impact      |
-| Remediation        | Prevent recurrence         | EventBridge, Lambda | Near-real-time detection|
+| Scope Expansion    | Check other services       | Athena (CUR)        | Confirmed systemic issue |
+| Remediation        | Prevent recurrence         | EventBridge, Lambda | Near-real-time detection |
 
 ---
 
@@ -64,7 +64,7 @@ During monthly cost reconciliation, Finance identified a discrepancy:
 
 - **Total AWS spend:** $315
 - **Spend visible when filtered by required tags:** $260
-- **Unallocated spend:** $53 (17%)
+- **Unallocated spend:** $53 (~17%)
 
 This discrepancy invalidated Finance reporting and triggered investigation.
 
@@ -92,7 +92,7 @@ Initial suspicion was a billing issue. The investigation confirmed the invoice w
 
 Using Athena queries against CUR data:
 - Filtered for resources where required tags were `NULL`
-- Identified EC2 charges accounting for a **$40 gap**
+- Identified EC2 charges accounting for **~$38 of the allocation gap**
 - Found partial-month EC2 usage, indicating a mid-month creation event
 
 **Discovery**
@@ -115,7 +115,7 @@ Steps:
 
 **Findings**
 - Resource was launched via **AWS CLI**
-- The CLI bypasses console-based tag prompts, making it a common escape hatch for governance controls
+- The AWS CLI does not enforce console-based tag prompts, making it a common path for **unintentional policy bypass**
 - API request did **not include required tags**
 - Tags were never removed — they were missing at creation
 
@@ -133,13 +133,15 @@ This confirmed a **policy enforcement gap**, not user tampering.
 
 Ran the same CUR tag validation query across all services with material spend:
 
-| Service | Billed | Allocated | Gap |
-|---------|--------|-----------|-----|
-| EC2     | $220   | $180      | $40 |
-| RDS     | $60    | $60       | $0  |
-| S3      | $35    | $20       | $15 |
+| Service | Billed | Allocated | Gap  |
+|---------|--------|-----------|------|
+| EC2     | $220   | $182      | ~$38 |
+| RDS     | $60    | $60       | $0   |
+| S3      | $35    | $20       | $15  |
 
-S3 showed the largest remaining allocation gap after EC2.
+**Note:** Minor rounding differences are due to partial-day resource usage and CUR line-item granularity. Totals reconcile to the **$53 allocation gap** observed at the invoice level.
+
+While EC2 represented the majority of unallocated spend, the S3 findings confirmed the issue was **systemic rather than service-specific**.
 
 **S3 Findings**
 - Two buckets missing the `Environment` tag key
@@ -177,7 +179,7 @@ Fix the system, not the people.
   - Slack alerts for fast remediation
 
 **Enforcement philosophy:**  
-Alert, don’t block. Production launches must never be impeded by governance controls. A 5-minute detection window is sufficient for Finance accuracy while preserving Engineering velocity during incidents.
+**Alert, don’t block.** Production launches must never be impeded by governance controls. A 5-minute detection window is sufficient for Finance accuracy while preserving Engineering velocity during incidents.
 
 **Result**
 - Detection latency reduced from **weeks to minutes**
@@ -189,7 +191,7 @@ Alert, don’t block. Production launches must never be impeded by governance co
 ## Results & Impact
 
 **Quantified outcomes**
-- Allocation visibility restored from **83% → 100%** (17-percentage-point improvement)
+- Allocation visibility restored from **~82.5% → 100%** (17.5-percentage-point improvement)
 - **$53/month** recurring allocation gap eliminated (**~$636/year**)
 - Detection latency reduced from **30 days → <5 minutes** (**99.7% reduction**)
 - Manual Finance reconciliation effort reduced by **~4 hours/month**
