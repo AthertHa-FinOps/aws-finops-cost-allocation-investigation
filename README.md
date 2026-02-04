@@ -125,6 +125,8 @@ This confirmed a **policy enforcement gap**, not user tampering.
 ![CloudTrail Event History filtered to RunInstances events](./screenshots/03a%20-%20cloudtrail-event-history-runinstances.png)
 ![CloudTrail RunInstances event JSON showing missing tag parameters and CLI user agent](./screenshots/03b%20-%20cloudtrail-runinstances-json-cli-useragent.png)
 
+*Note: JSON view is truncated in the screenshot for readability. The remaining `TagSpecificationSet` contains no additional tag keys. The instance was launched without required allocation tags.*
+
 ---
 
 ## Phase 4: Expanding Scope to S3
