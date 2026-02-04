@@ -144,8 +144,9 @@ Ran the same CUR tag validation query across all services with material spend:
 While EC2 represented the majority of unallocated spend, the S3 findings confirmed the issue was **systemic rather than service-specific**.
 
 **S3 Findings**
-- Two buckets missing the `Environment` tag key
-- $15/month unallocated spend
+- Two buckets missing the required `Environment` tag
+- Other tags (`Project`, `Owner`) were present but insufficient for allocation
+- $15/month in unallocated storage spend
 
 ![CUR-based S3 tag compliance audit showing unallocated storage spend](./screenshots/04%20-%20cur-s3-tag-compliance-audit.png)
 
