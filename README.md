@@ -90,9 +90,9 @@ Initial suspicion was a billing issue. The investigation confirmed the invoice w
 
 **Objective:** Identify which resources were missing required allocation tags.
 
-Using Athena queries against CUR data:
+**Using Athena queries against CUR data:**
 - Filtered for resources where required tags were `NULL`
-- Identified EC2 charges accounting for **~$38 of the allocation gap**
+- Identified EC2 charges accounting for **$40 in CUR service-level reporting**, which reconciled to **~$38 at the invoice line-item level** due to partial-day usage and CUR granularity
 - Found partial-month EC2 usage, indicating a mid-month creation event
 
 **Discovery**
@@ -141,7 +141,7 @@ Ran the same CUR tag validation query across all services with material spend:
 | RDS     | $60    | $60       | $0   |
 | S3      | $35    | $20       | $15  |
 
-**Note:** Minor rounding differences are due to partial-day resource usage and CUR line-item granularity. Totals reconcile to the **$53 allocation gap** observed at the invoice level.
+**Note:** EC2 instance-level CUR screenshots show ~$40 in unallocated cost. When reconciled at the invoice line-item level, partial-day usage and CUR granularity reduce the effective EC2 allocation gap to **~$38**, which aligns with the **$53 total unallocated spend** when combined with S3.
 
 While EC2 represented the majority of unallocated spend, the S3 findings confirmed the issue was **systemic rather than service-specific**.
 
@@ -182,7 +182,7 @@ Fix the system, not the people.
   - Slack alerts for fast remediation
 
 **Enforcement philosophy:**  
-**Alert, don’t block.** Production launches must never be impeded by governance controls. A 5-minute detection window is sufficient for Finance accuracy while preserving Engineering velocity during incidents.
+**Alert, don’t block.** In most organizations, production launches should not be impeded by governance controls.. A 5-minute detection window is sufficient for Finance accuracy while preserving Engineering velocity during incidents.
 
 **Result**
 - Detection latency reduced from **weeks to minutes**
@@ -237,6 +237,7 @@ The value of this portfolio is the **investigation and governance logic**, not b
 
 ## Scope & Limitations
 
+This case study reflects how I contribute as a strong individual contributor while learning how these patterns scale in larger, multi-account organizations.
 - Sandbox AWS account used to control cost
 - Real AWS resources, billing, and logs generated
 - Dollar values are small; failure patterns are production-real
@@ -255,3 +256,5 @@ This case demonstrates how I approach FinOps problems:
 The tools are AWS-native.  
 The logic scales.  
 The outcome is trustworthy financial reporting without slowing the business.
+
+This portfolio reflects how I operate as a strong individual contributor: investigating real problems end-to-end, delivering reliable fixes, and learning how these patterns scale within larger organizations.
