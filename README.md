@@ -82,8 +82,7 @@ Initial suspicion was a billing issue. The investigation confirmed the invoice w
 
 **Conclusion:** Billing was correct. The problem existed downstream in allocation and reporting.
 
-![AWS invoice validation confirming $315 total spend](./screenshots/01-invoice-total-315.png)
-
+![AWS invoice validation confirming $315 total spend](./screenshots/01%20-%20invoice-total-315.png)
 
 ---
 
@@ -123,9 +122,9 @@ Steps:
 
 This confirmed a **policy enforcement gap**, not user tampering.
 
-![CloudTrail forensic evidence showing RunInstances call without required tags](./screenshots/03-cloudtrail-forensics-runinstances-missing-tags-cli-launch.png)
-![CloudTrail Event History filtered to RunInstances events](./screenshots/03a-cloudtrail-event-history-runinstances.png)
-![CloudTrail RunInstances event JSON showing missing tag parameters and CLI user agent](./screenshots/03b-cloudtrail-runinstances-json-cli-useragent.png)
+![CloudTrail forensic evidence showing RunInstances call without required tags](./screenshots/03%20-%20cloudtrail-forensics-runinstances-missing-tags-cli-launch.png)
+![CloudTrail Event History filtered to RunInstances events](./screenshots/03a%20-%20cloudtrail-event-history-runinstances.png)
+![CloudTrail RunInstances event JSON showing missing tag parameters and CLI user agent](./screenshots/03b%20-%20cloudtrail-runinstances-json-cli-useragent.png)
 
 ---
 
@@ -147,7 +146,7 @@ S3 showed the largest remaining allocation gap after EC2.
 - Two buckets missing the `Environment` tag key
 - $15/month unallocated spend
 
-![CUR-based S3 tag compliance audit showing unallocated storage spend](./screenshots/04-cur-s3-tag-compliance-audit.png)
+![CUR-based S3 tag compliance audit showing unallocated storage spend](./screenshots/04%20-%20cur-s3-tag-compliance-audit.png)
 
 ---
 
