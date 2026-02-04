@@ -100,8 +100,7 @@ Using Athena queries against CUR data:
 - Instance ID: `i-0c9cfb67280fe44ee`
 - Missing tags: `Environment`, `Project`, `Owner`
 
-![Athena CUR query isolating unallocated EC2 spend caused by missing allocation tags](./screenshots/02-cur-resource-isolation-missing-allocation-tags.png)
-
+![Athena CUR query isolating unallocated EC2 spend caused by missing allocation tags](./screenshots/02%20-%20cur-resource-isolation-missing-allocation-tags.png)
 
 ---
 
