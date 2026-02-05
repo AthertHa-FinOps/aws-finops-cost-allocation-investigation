@@ -1,34 +1,39 @@
-# aws-finops-cost-allocation-investigation
+# AWS FinOps Cost Allocation Investigation
 
 ## TL;DR (For Hiring Managers)
 
 This repository documents an **end-to-end AWS FinOps investigation** into a **17% cost allocation gap** caused by missing resource tags — not overspend or billing error.
 
-**What happened**
+### What happened
+
 - Total AWS spend: **$315**
 - Spend visible to Finance via required allocation tags: **$260**
 - **$53 (~17%)** of spend was billed correctly but **invisible to allocation reports**
 - Finance could not reliably allocate costs by Environment, Project, or Owner
 
-**How I investigated**
+### How I investigated
+
 - Validated invoice accuracy to rule out billing discrepancies
 - Queried **Cost & Usage Reports (CUR) via Athena** to isolate unallocated spend
 - Identified specific EC2 and S3 resources missing required tags
 - Used **CloudTrail forensic analysis** to trace the exact API calls that created non-compliant resources
 - Confirmed tags were **missing at creation time**, not removed later
 
-**How I fixed it**
+### How I fixed it
+
 - Corrected current-month data so Finance could close accurately
 - Designed **event-driven governance controls** (CloudTrail → EventBridge → Lambda)
 - Reduced detection time from **monthly reconciliation to minutes**
 - Prevented recurrence **without blocking engineers or CI/CD pipelines**
 
 **Outcome**
+
 - Restored **100% cost allocation visibility**
 - Eliminated recurring manual reconciliation work
 - Shifted governance from reactive cleanup to proactive prevention
 
 **Timeline note:**  
+
 This investigation was conducted in **January 2026** using a sandbox AWS account. Dates shown in CloudTrail screenshots reflect actual event timestamps.
 
 ---
@@ -137,11 +142,11 @@ Ran the same CUR tag validation query across all services with material spend:
 
 | Service | Billed | Allocated | Gap  |
 |---------|--------|-----------|------|
-| EC2     | $220   | $182      | $40 |
+| EC2     | $220   | $182      | $40  |
 | RDS     | $60    | $60       | $0   |
 | S3      | $35    | $20       | $15  |
 
-Note: Note: EC2 instance-level CUR screenshots show $40 in unallocated EC2 spend. Minor invoice-level variance is attributable to partial-day usage and CUR granularity and does not affect the allocation conclusion.
+**Note:** EC2 instance-level CUR screenshots show $40 in unallocated EC2 spend. Minor invoice-level variance is attributable to partial-day usage and CUR granularity and does not affect the allocation conclusion.
 
 While EC2 represented the majority of unallocated spend, the S3 findings confirmed the issue was **systemic rather than service-specific**.
 
@@ -182,7 +187,7 @@ Fix the system, not the people.
   - Slack alerts for fast remediation
 
 **Enforcement philosophy:**  
-**Alert, don’t block.** In most organizations, production launches should not be impeded by governance controls.. A 5-minute detection window is sufficient for Finance accuracy while preserving Engineering velocity during incidents.
+**Alert, don’t block.** In most organizations, production launches should not be impeded by governance controls. A 5-minute detection window is sufficient for Finance accuracy while preserving Engineering velocity during incidents.
 
 **Result**
 - Detection latency reduced from **weeks to minutes**
