@@ -92,7 +92,7 @@ Initial suspicion was a billing issue. The investigation confirmed the invoice w
 
 **Using Athena queries against CUR data:**
 - Filtered for resources where required tags were `NULL`
-- Identified EC2 charges accounting for **$40 in CUR service-level reporting**, which reconciled to **~$38 at the invoice line-item level** due to partial-day usage and CUR granularity
+- Identified EC2 charges accounting for $40 in unallocated spend in CUR service-level reporting, driven by a mid-month resource creation event.
 - Found partial-month EC2 usage, indicating a mid-month creation event
 
 **Discovery**
@@ -137,11 +137,11 @@ Ran the same CUR tag validation query across all services with material spend:
 
 | Service | Billed | Allocated | Gap  |
 |---------|--------|-----------|------|
-| EC2     | $220   | $182      | ~$38 |
+| EC2     | $220   | $182      | $40 |
 | RDS     | $60    | $60       | $0   |
 | S3      | $35    | $20       | $15  |
 
-**Note:** EC2 instance-level CUR screenshots show ~$40 in unallocated cost. When reconciled at the invoice line-item level, partial-day usage and CUR granularity reduce the effective EC2 allocation gap to **~$38**, which aligns with the **$53 total unallocated spend** when combined with S3.
+Note: Note: EC2 instance-level CUR screenshots show $40 in unallocated EC2 spend. Minor invoice-level variance is attributable to partial-day usage and CUR granularity and does not affect the allocation conclusion.
 
 While EC2 represented the majority of unallocated spend, the S3 findings confirmed the issue was **systemic rather than service-specific**.
 
