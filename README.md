@@ -114,6 +114,8 @@ Using Athena queries against CUR data (**unblended costs** to match invoice sour
 
 ![CUR query isolating unallocated EC2 spend](./screenshots/02%20-%20cur-resource-isolation-missing-allocation-tags.png)
 
+This query filters for records where required allocation tags are NULL, isolating spend that cannot be attributed in Finance reports.
+
 ---
 
 ## Phase 3: CloudTrail Forensic Investigation
@@ -159,6 +161,8 @@ While EC2 represented the largest gap, S3 confirmed the issue was **systemic**.
 
 ![S3 tag compliance audit via CUR](./screenshots/04%20-%20cur-s3-tag-compliance-audit.png)
 
+Although Project and Owner tags were present, the missing Environment tag prevented Finance from allocating S3 costs, resulting in $15/month of invisible spend.
+
 ---
 
 ## Root Cause Analysis
@@ -200,13 +204,19 @@ flowchart TD
 This approach preserves engineering velocity while maintaining financial accuracy.  
 Non-compliant resources are surfaced immediately without breaking CI/CD pipelines or developer workflows.
 
+This aligns with progressive FinOps governance, where guardrails precede enforcement.
+
 ---
 
 ## Results and Impact
 
-### Quantified Outcomes
+### Financial Reporting Integrity
 
 - Allocation visibility restored from **~82.5% to 100%**
+- Finance closed monthly reports without escalation
+
+### Quantified Outcomes
+
 - **$53/month** recurring allocation gap eliminated (**~$636/year**)
 - Detection latency reduced from **~30 days to under 5 minutes**
 - Manual Finance reconciliation reduced by **~4 hours per month**
@@ -271,3 +281,5 @@ The tools are AWS-native.
 
 The logic scales.  
 The outcome is trustworthy financial reporting without slowing the business.
+
+This is the same investigative and governance approach I apply regardless of spend scale.
