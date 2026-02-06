@@ -152,6 +152,8 @@ CUR validation across services:
 | RDS     | $60    | $60       | $0  |
 | S3      | $35    | $20       | $15 |
 
+Note: Service-level rollups reflect CUR aggregation and rounding for partial-day usage. Line-item analysis confirmed $53 in unallocated spend, matching invoice-level billing records.
+
 While EC2 represented the largest gap, S3 confirmed the issue was **systemic**.
 
 **S3 Findings**
@@ -186,6 +188,8 @@ If tagging depends on humans being perfect, it will fail.
 - Lambda for tag validation
 - Slack alerts for fast remediation
 
+Findings were reviewed with Finance and Engineering stakeholders to confirm accuracy, align on remediation approach, and avoid introducing deployment friction.
+
 ---
 
 ## Architecture Overview
@@ -203,6 +207,7 @@ flowchart TD
 
 This approach preserves engineering velocity while maintaining financial accuracy.  
 Non-compliant resources are surfaced immediately without breaking CI/CD pipelines or developer workflows.
+Once compliance stabilizes above 95% for a sustained period, SCP enforcement could be introduced for greenfield accounts while grandfathering existing workflows.
 
 This aligns with progressive FinOps governance, where guardrails precede enforcement.
 
