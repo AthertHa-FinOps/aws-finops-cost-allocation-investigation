@@ -177,6 +177,22 @@ If tagging depends on humans being perfect, it will fail.
 
 ---
 
+## Key Design Decisions
+
+Several implementation choices were intentional:
+
+- CUR + Athena was used instead of Cost Explorer to allow row-level inspection
+  of missing tags, which Cost Explorer cannot surface.
+- EventBridge + Lambda was chosen over AWS Config to enable near-real-time
+  detection with lower cost and faster feedback loops.
+- Alerting was prioritized over blocking to preserve engineering velocity
+  during early governance maturity stages.
+
+These decisions reflect a bias toward fast feedback, low friction,
+and defensible financial reporting.
+
+---
+
 ## Remediation & Controls
 
 ### Immediate Correction
@@ -188,7 +204,7 @@ If tagging depends on humans being perfect, it will fail.
 - Lambda for tag validation
 - Slack alerts for fast remediation
 
-Findings were reviewed with Finance and Engineering stakeholders to confirm accuracy, align on remediation approach, and avoid introducing deployment friction.
+Findings were reviewed from both Finance and Engineering perspectives to confirm reporting accuracy and avoid deployment friction.
 
 ---
 
@@ -219,6 +235,16 @@ This aligns with progressive FinOps governance, where guardrails precede enforce
 
 - Allocation visibility restored from **~82.5% to 100%**
 - Finance closed monthly reports without escalation
+
+### Metrics & Assumptions
+
+- Manual reconciliation time (~4 hours/month) is based on Finance validating
+  tag completeness, exporting reports, and coordinating remediation.
+- Detection latency (~30 days) reflects monthly close cycles prior to automation.
+- Allocation percentages are calculated using unblended CUR data to align
+  directly with invoice totals.
+
+These assumptions reflect common FinOps operating patterns and are conservative.
 
 ### Quantified Outcomes
 
@@ -267,6 +293,17 @@ The value of this repository is the **reasoning and governance design**, not but
 - Real AWS resources, billing data, and logs generated
 - Dollar values are intentionally small; failure patterns are production-real
 - Focus is on investigation, attribution, and governance design
+
+## Non-Goals
+
+This investigation intentionally did not focus on:
+
+- Cost optimization or rightsizing
+- Reserved Instances or Savings Plans
+- Chargeback implementation details
+
+The priority was restoring trust in allocation data.
+Optimization is only meaningful once ownership and attribution are reliable.
 
 ---
 
