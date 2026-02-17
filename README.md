@@ -101,7 +101,7 @@ The invoice was accurate. The failure was in **cost attribution**, not cost gene
 Using Athena queries against CUR data (**unblended costs** to match invoice source of truth):
 
 - Filtered for records where required tags were `NULL`
-- Identified EC2 charges accounting for **$40** in unallocated spend
+- Identified EC2 charges accounting for approximately $38–$40 in unallocated spend at the service level (screenshot reflects point-in-time CUR data; final reconciled amount confirmed in Phase 4)
 - Partial-month usage indicated a mid-month creation event
 
 **Discovery**
@@ -113,6 +113,7 @@ Using Athena queries against CUR data (**unblended costs** to match invoice sour
   - `Owner`
 
 ![CUR query isolating unallocated EC2 spend](./screenshots/02%20-%20cur-resource-isolation-missing-allocation-tags.png)
+
 
 This query filters for records where required allocation tags are NULL, isolating spend that cannot be attributed in Finance reports.
 
@@ -148,9 +149,11 @@ CUR validation across services:
 
 | Service | Billed | Allocated | Gap |
 |---------|--------|-----------|-----|
-| EC2     | $220   | $182      | $40 |
+| EC2     | $220   | $182      |~$38 |
 | RDS     | $60    | $60       | $0  |
 | S3      | $35    | $20       | $15 |
+
+~$38 (EC2) + $15 (S3) = $53 total unallocated spend. Minor variance is attributable to partial-day usage and CUR line-item granularity. All figures reconcile to invoice-level totals.
 
 Note: Service-level rollups reflect CUR aggregation and rounding for partial-day usage. Line-item analysis confirmed $53 in unallocated spend, matching invoice-level billing records.
 
@@ -209,12 +212,14 @@ Findings were reviewed from both Finance and Engineering perspectives to confirm
 ---
 
 ## Architecture Overview
-
-```mermaid
-flowchart TD
-    A[CloudTrail] --> B[EventBridge Rule]
-    B --> C[Lambda: Tag Validation]
-    C --> D[Slack Notification]
+```
+CloudTrail (event capture)
+    ↓
+EventBridge (rule-based filtering)
+    ↓
+Lambda (tag validation logic)
+    ↓
+Slack (near-real-time alert to Finance + resource owner)
 ```
 
 ### Enforcement Philosophy
@@ -240,7 +245,7 @@ This aligns with progressive FinOps governance, where guardrails precede enforce
 
 - Manual reconciliation time (~4 hours/month) is based on Finance validating
   tag completeness, exporting reports, and coordinating remediation.
-- Detection latency (~30 days) reflects monthly close cycles prior to automation.
+- **Detection latency (~30 days) reflects monthly close cycles prior to automation.**
 - Allocation percentages are calculated using unblended CUR data to align
   directly with invoice totals.
 
@@ -251,6 +256,8 @@ These assumptions reflect common FinOps operating patterns and are conservative.
 - **$53/month** recurring allocation gap eliminated (**~$636/year**)
 - Detection latency reduced from **~30 days to under 5 minutes**
 - Manual Finance reconciliation reduced by **~4 hours per month**
+
+**Note:** The ~$636/year figure represents spend that was correctly billed but invisible to allocation reports. This is a reporting integrity metric, not a cost savings figure. The goal was attribution accuracy, not spend reduction.
 
 ### Operational Impact
 
@@ -265,8 +272,7 @@ These assumptions reflect common FinOps operating patterns and are conservative.
 - Baseline tag compliance weekly using CUR
 - Track allocation coverage as a first-class FinOps KPI
 - Introduce SCP enforcement for **new (greenfield) accounts only** once compliance stabilizes
-- Add cost anomaly detection for early risk signals
-- Publish shared FinOps dashboards for Finance and Engineering
+- Add anomaly detection and shared dashboards for Finance and Engineering visibility
 
 ---
 
@@ -278,7 +284,7 @@ This case emphasizes **investigation methodology and governance design** rather 
 
 ## What’s in This Repository
 
-- Production-ready Lambda (Python, retries, error handling)
+- Operationally hardened example Lambda (Python, structured logging, error handling)
 - EventBridge rules (JSON)
 - Athena SQL queries with performance notes
 - Optional Terraform deployment templates
