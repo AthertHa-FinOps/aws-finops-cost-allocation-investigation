@@ -2,7 +2,7 @@
 
 ## TL;DR (For Hiring Managers)
 
-This repository documents an **end-to-end AWS FinOps investigation** into a **17% cost allocation gap** caused by missing resource tags — not overspend or billing error.
+This repository documents an end-to-end AWS FinOps investigation into a **17% cost allocation gap** caused by missing resource tags, not overspend or billing error.
 
 ---
 
@@ -76,7 +76,7 @@ During monthly reconciliation, Finance identified a discrepancy:
 - **Spend visible with required tags:** $260  
 - **Unallocated spend:** $53 (~17%)
 
-The invoice was accurate. The failure was in **cost attribution**, not cost generation.
+The invoice was accurate. The failure was in **cost attribution**, not cost generation. All figures, assumptions, and methodology are documented in the Metrics & Assumptions section below.
 
 ---
 
@@ -113,7 +113,6 @@ Using Athena queries against CUR data (**unblended costs** to match invoice sour
   - `Owner`
 
 ![CUR query isolating unallocated EC2 spend](./screenshots/02%20-%20cur-resource-isolation-missing-allocation-tags.png)
-
 
 This query filters for records where required allocation tags are NULL, isolating spend that cannot be attributed in Finance reports.
 
@@ -175,8 +174,8 @@ Although Project and Owner tags were present, the missing Environment tag preven
 **Root cause:**  
 No enforcement at resource creation time.
 
-If tagging depends on humans being perfect, it will fail.  
-**Fix the system, not the people.**
+If tagging depends on humans being perfect, it will fail.
+The gap was not a user error — it was a system design gap that required a system-level response.
 
 ---
 
@@ -207,7 +206,7 @@ and defensible financial reporting.
 - Lambda for tag validation
 - Slack alerts for fast remediation
 
-Findings were reviewed from both Finance and Engineering perspectives to confirm reporting accuracy and avoid deployment friction.
+I reviewed findings from both Finance and Engineering perspectives to confirm reporting accuracy and avoid deployment friction.
 
 ---
 
@@ -315,19 +314,7 @@ Optimization is only meaningful once ownership and attribution are reliable.
 
 ## Why This Matters
 
-This case demonstrates how I approach FinOps problems:
-
-- Validate the data
-- Isolate the failure
-- Trace it to the source
-- Fix the system, not the people
+Most allocation problems are not caught because Finance lacks the tooling to see them in real time, and Engineering lacks the incentive to tag consistently. This investigation showed me that governance design matters more than enforcement — surfacing problems immediately changes behavior faster than blocking deployments.
 
 **Analysis note:**  
-Unblended costs were used to align directly with AWS invoice totals, which Finance treats as the authoritative source of truth.
-
-The tools are AWS-native.  
-
-The logic scales.  
-The outcome is trustworthy financial reporting without slowing the business.
-
-This is the same investigative and governance approach I apply regardless of spend scale.
+Unblended costs were used to align directly with AWS invoice totals, which Finance treats as the authoritative source of truth. The architecture is AWS-native and the investigation methodology applies regardless of spend scale.
