@@ -245,35 +245,35 @@ These decisions reflect a bias toward fast feedback, low friction, and defensibl
 **Permanent prevention:**
 
 ```
-┌─────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────┐
 │              AWS Resource Creation Event                 │
 │         (EC2 RunInstances, S3 CreateBucket, etc.)        │
-└─────────────────────────┬───────────────────────────────┘
+└─────────────────────────┬────────────────────────────────┘
                           │
                           ▼
-┌─────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────┐
 │                     AWS CloudTrail                       │
 │              Captures all API-level events               │
-└─────────────────────────┬───────────────────────────────┘
+└─────────────────────────┬────────────────────────────────┘
                           │
                           ▼
-┌─────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────┐
 │                  Amazon EventBridge                      │
 │         Rule filters for resource creation events        │
-└─────────────────────────┬───────────────────────────────┘
+└─────────────────────────┬────────────────────────────────┘
                           │
                           ▼
-┌─────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────┐
 │                   AWS Lambda                             │
 │     Validates required tags: Environment, Project,       │
 │     Owner — flags missing or non-compliant resources     │
-└──────────────┬──────────────────────┬───────────────────┘
+└──────────────┬──────────────────────┬────────────────────┘
                │                      │
                ▼                      ▼
-     ┌─────────────────┐    ┌──────────────────────┐
+     ┌──────────────────┐    ┌───────────────────────┐
      │  Slack: Finance  │    │  Slack: Resource Owner│
      │  Alert Channel   │    │  Direct Notification  │
-     └─────────────────┘    └──────────────────────┘
+     └──────────────────┘    └───────────────────────┘
 ```
 
 **Enforcement philosophy: Alert before block.**
@@ -292,7 +292,7 @@ The EventBridge rule `finops-tag-compliance-monitor` was configured on the defau
 
 *Review and create screen confirming rule name, event pattern, and Lambda target:*
 
-![EventBridge rule finops-tag-compliance-monitor — Enabled on default event bus, event pattern filtering aws.ec2 and aws.s3 RunInstances and CreateBucket via CloudTrail, target finops-tag-validator Lambda function](./screenshots/05a%20-%20eventbridge-rule-finops-monitor.png)
+![EventBridge Rule](screenshots/05a-eventbridge-rule.png)
 
 ---
 
@@ -302,11 +302,11 @@ Lambda inspects the resource tags included in the API event payload and validate
 
 *Function code showing the REQUIRED_TAGS list, EC2 and S3 validation branches, IAM principal extraction, and FINOPS TAG COMPLIANCE VIOLATION alert:*
 
-![Lambda function finops-tag-validator — REQUIRED_TAGS Environment Project Owner defined line 4, RunInstances and CreateBucket conditional branches, IAM principal and account ID extraction, FINOPS TAG COMPLIANCE VIOLATION print alert](./screenshots/05b%20-%20lambda-finops-tag-validator-code.png)
+![Lambda function finops-tag-validator — REQUIRED_TAGS Environment Project Owner, validation logic, FINOPS TAG COMPLIANCE VIOLATION alert](./screenshots/05b%20-%20lambda-finops-tag-validator-code.png)
 
 *Runtime configuration confirming deployment:*
 
-![Lambda runtime settings — Python 3.14, handler lambda_function.lambda_handler, x86_64, Lambda Deployed status confirmed](./screenshots/05b-ii%20-%20lambda-settings.png)
+![Lambda runtime settings — Python 3.14, handler lambda_function.lambda_handler, x86_64 confirmed](./screenshots/05b-ii%20-%20lambda-settings.png)
 
 ---
 
@@ -316,7 +316,7 @@ The function was tested with a simulated untagged RunInstances event. All three 
 
 *Test event `test-untagged-ec2` showing execution succeeded, missing_tags confirmed as Environment, Project, and Owner, with full alert payload in the log output:*
 
-![Lambda test execution test-untagged-ec2 — Executing function succeeded, response missing_tags Environment Project Owner, log output FINOPS TAG COMPLIANCE VIOLATION RunInstances IAM principal arn:aws:iam::123456789012:user/developer-01 account 123456789012 region us-east-1](./screenshots/05c%20-%20lambda-test-execution-missing-tags.png)
+![Test Result](screenshots/05c-lambda-test-result.png)
 
 This aligns with progressive FinOps governance, where guardrails precede enforcement.
 
