@@ -1,16 +1,52 @@
 # AWS FinOps Cost Allocation Investigation
 
+> This project documents a full FinOps investigation into an AWS cost allocation failure and the governance architecture built to prevent recurrence. Using Cost and Usage Reports (CUR), Athena SQL analysis, and CloudTrail forensics, I traced a 17% allocation gap to resources created without required tags via AWS CLI. The result was an event-driven governance control (CloudTrail to EventBridge to Lambda) that restored 100% cost attribution visibility and reduced detection latency from monthly reconciliation to under five minutes.
+
+---
+
 ## TL;DR (For Hiring Managers)
 
-This repository documents an end-to-end AWS FinOps investigation into a **17% cost allocation gap** caused by missing resource tags, not overspend or billing error.
+Investigated a **17% AWS cost allocation gap** caused by missing resource tags. Not overspend. Not a billing error. A reporting visibility failure.
+
+Used **CUR and Athena** to isolate unallocated spend and **CloudTrail forensics** to trace the root cause to CLI-launched resources that were created without required tags.
+
+Implemented an **event-driven governance control** (CloudTrail to EventBridge to Lambda) that restored 100% cost attribution visibility and reduced mean time to detect (MTTD) from approximately 30 days to under 5 minutes.
+
+The environment is intentionally small to control cost, but this failure pattern scales linearly. In enterprise environments where monthly spend ranges from $2M to $10M across 50 to 200 accounts, the same attribution gap can hide hundreds of thousands of dollars from Finance reporting.
+
+---
+
+## Key Technologies
+
+| Layer | Technology |
+|---|---|
+| Billing data | AWS Cost and Usage Report (CUR) |
+| Query engine | Amazon Athena |
+| Forensics | AWS CloudTrail |
+| Event capture | Amazon EventBridge |
+| Tag validation | AWS Lambda (Python) |
+| Governance | AWS Organizations Tag Policies, SCP |
+| Alerting | Slack (Finance and resource owner channels) |
+| Reporting | Anthropic Claude (AI-assisted) |
+
+---
+
+## What This Project Demonstrates
+
+- AWS Cost and Usage Report (CUR) analysis with Athena
+- Cloud billing investigation methodology
+- Tag compliance analysis and gap identification
+- CloudTrail forensic investigation
+- FinOps governance design and remediation architecture
+- AI-assisted FinOps reporting
 
 ---
 
 ## What Happened
 
 - Total AWS spend: **$315**
-- Spend visible to Finance via required allocation tags: **$260**
-- **$53 (~17%)** of spend was billed correctly but **invisible to allocation reports**
+- Spend visible to Finance via required allocation tags: **$262**
+- **$53 (approximately 17%)** was billed correctly but **invisible to allocation reports**
 - Finance could not reliably allocate costs by Environment, Project, or Owner
 
 ---
@@ -18,65 +54,55 @@ This repository documents an end-to-end AWS FinOps investigation into a **17% co
 ## How I Investigated
 
 - Validated invoice accuracy to rule out billing discrepancies
-- Queried **Cost & Usage Reports (CUR) via Athena** to isolate unallocated spend
+- Queried Cost and Usage Reports (CUR) via Athena to isolate unallocated spend
 - Identified EC2 and S3 resources missing required tags
-- Used **CloudTrail forensic analysis** to trace the API calls that created non-compliant resources
-- Confirmed tags were **missing at creation time**, not removed later
+- Used CloudTrail forensic analysis tracing API calls that created non-compliant resources
+- Confirmed tags were missing at creation time, not removed later
+- Applied AI-assisted analysis to generate an executive-ready investigation report
 
 ---
 
 ## How I Fixed It
 
 - Corrected current-month data so Finance could close accurately
-- Designed **event-driven governance controls** (CloudTrail → EventBridge → Lambda)
-- Reduced detection time from **monthly reconciliation to minutes**
-- Prevented recurrence **without blocking engineers or CI/CD pipelines**
+- Implemented an event-driven tagging compliance control (CloudTrail to EventBridge to Lambda)
+- Reduced MTTD from approximately 30 days to under 5 minutes
+- Prevented long-lived untagged resources through immediate detection and notification
 
 ---
 
 ## Outcome
 
 - Restored **100% cost allocation visibility**
-- Eliminated recurring manual reconciliation work
+- Reduced recurring manual reconciliation work
 - Shifted governance from reactive cleanup to proactive prevention
 
-**Timeline note:**  
-This investigation was conducted in **January 2026** using a sandbox AWS account. CloudTrail timestamps reflect real event times.
+**Timeline note:** This investigation was conducted in January 2026 using a sandbox AWS account. CloudTrail timestamps reflect real event times.
 
 ---
 
 ## How to Read This Case Study
 
-This repository is written in the style of an **internal FinOps investigation report**, not a step-by-step tutorial.
-
-- Screenshots document **evidence and root cause**
-- SQL queries emphasize **decision-making**, not report completeness
-- Remediation focuses on **governance and system design**
-- Dollar values are intentionally small, but **failure patterns are production-real**
+This repository is written in the style of an internal FinOps investigation report, not a step-by-step tutorial. Screenshots document evidence and root cause. SQL queries emphasize decision-making, not report completeness. Remediation focuses on governance and system design. Dollar values are intentionally small but the failure patterns are production-real.
 
 ---
 
-## Investigation Summary (At a Glance)
+## Investigation Summary
 
-| Phase              | Objective                  | Tooling              | Outcome                  |
-|--------------------|----------------------------|----------------------|--------------------------|
-| Invoice Validation | Confirm billing accuracy   | Cost Explorer, CUR   | Billing ruled out        |
-| Resource Isolation | Identify unallocated spend | Athena (CUR)         | EC2 & S3 gaps isolated   |
-| Forensics          | Identify creation source   | CloudTrail           | Untagged API calls found |
-| Scope Expansion    | Check other services       | Athena (CUR)         | Systemic issue confirmed |
-| Remediation        | Prevent recurrence         | EventBridge, Lambda  | Near-real-time detection |
+| Phase | Objective | Tooling | Outcome |
+|---|---|---|---|
+| Invoice Validation | Confirm billing accuracy | Cost Explorer, CUR | Billing ruled out |
+| Resource Isolation | Identify unallocated spend | Athena (CUR) | EC2 and S3 gaps isolated |
+| Forensics | Identify creation source | CloudTrail | Untagged API calls found |
+| Scope Expansion | Check other services | Athena (CUR) | Systemic issue confirmed |
+| Remediation | Prevent recurrence | EventBridge, Lambda | Near-real-time detection |
+| **AI-Assisted Reporting** | **Generate executive report** | **Anthropic Claude** | **Finance-ready report produced** |
 
 ---
 
-## Context & Problem Statement
+## Context and Problem Statement
 
-During monthly reconciliation, Finance identified a discrepancy:
-
-- **Total AWS spend:** $315  
-- **Spend visible with required tags:** $260  
-- **Unallocated spend:** $53 (~17%)
-
-The invoice was accurate. The failure was in **cost attribution**, not cost generation. All figures, assumptions, and methodology are documented in the Metrics & Assumptions section below.
+During monthly reconciliation, Finance identified a discrepancy. Total AWS spend was $315. Spend visible with required tags was $262. Unallocated spend was $53, approximately 17% of total. The invoice was accurate. The failure was in cost attribution, not cost generation.
 
 ---
 
@@ -84,9 +110,7 @@ The invoice was accurate. The failure was in **cost attribution**, not cost gene
 
 **Objective:** Confirm AWS billed correctly before investigating allocation.
 
-- Validated service totals in Cost Explorer
-- Reconciled totals against CUR via Athena
-- Confirmed invoice totals matched exactly
+Validated service totals in Cost Explorer, reconciled totals against CUR via Athena, and confirmed invoice totals matched exactly.
 
 **Conclusion:** Billing was correct. The issue existed downstream.
 
@@ -98,23 +122,69 @@ The invoice was accurate. The failure was in **cost attribution**, not cost gene
 
 **Objective:** Identify resources missing required allocation tags.
 
-Using Athena queries against CUR data (**unblended costs** to match invoice source of truth):
+**Data flow:**
 
-- Filtered for records where required tags were `NULL`
-- Identified EC2 charges accounting for approximately $38–$40 in unallocated spend at the service level (screenshot reflects point-in-time CUR data; final reconciled amount confirmed in Phase 4)
-- Partial-month usage indicated a mid-month creation event
+```
+AWS Account (Sandbox)
+        │
+        ▼
+Cost & Usage Report (CUR)
+Delivered daily to S3 billing bucket
+        │
+        ▼
+AWS S3 — Billing Data Bucket
+Raw CUR parquet files
+        │
+        ▼
+AWS Athena
+SQL queries against CUR schema
+        │
+        ▼
+Unallocated Spend Detection
+NULL tag filtering → resource isolation
+        │
+        ▼
+Allocation Gap Confirmed
+$53 (~17%) invisible to Finance reporting
+```
+
+Using Athena queries against CUR data with unblended costs to match the invoice source of truth, I filtered for records where required tags were NULL. EC2 charges accounted for approximately $38 to $40 in unallocated spend. Partial-month usage indicated a mid-month creation event.
+
+**SQL — Unallocated Spend Detection:**
+
+```sql
+SELECT
+    line_item_usage_account_id,
+    line_item_product_code,
+    line_item_resource_id,
+    DATE_TRUNC('month', line_item_usage_start_date)  AS billing_month,
+    SUM(line_item_unblended_cost)                    AS total_cost,
+    resource_tags_user_environment,
+    resource_tags_user_project,
+    resource_tags_user_owner
+FROM cur_table
+WHERE
+    line_item_line_item_type = 'Usage'
+    AND line_item_usage_start_date
+        BETWEEN DATE '2026-01-01' AND DATE '2026-01-31'
+    AND (
+        resource_tags_user_environment IS NULL
+        OR resource_tags_user_project  IS NULL
+        OR resource_tags_user_owner    IS NULL
+    )
+GROUP BY 1, 2, 3, 4, 6, 7, 8
+ORDER BY total_cost DESC;
+```
+
+Unblended cost aligns with invoice totals, which Finance treats as the authoritative source of truth. Account ID and time filtering support multi-account environments and month-over-month comparison. Cost Explorer cannot surface row-level NULL tag data. CUR via Athena is required for this analysis.
+
+**Note on tag visibility:** The required tags (Environment, Project, Owner) were activated as Cost Allocation Tags in the AWS Billing console before this investigation began. Tags must be activated in Billing under Cost Allocation Tags before they appear as columns in CUR datasets. This prerequisite is commonly missed in new AWS environments.
 
 **Discovery**
 - **Instance:** `PROD-WEB-SERVER-01`
-- **Instance ID:** `i-0c9cfb67280fe44ee`
-- **Missing tags:**
-  - `Environment`
-  - `Project`
-  - `Owner`
+- **Missing tags:** Environment, Project, Owner
 
 ![CUR query isolating unallocated EC2 spend](./screenshots/02%20-%20cur-resource-isolation-missing-allocation-tags.png)
-
-This query filters for records where required allocation tags are NULL, isolating spend that cannot be attributed in Finance reports.
 
 ---
 
@@ -122,13 +192,9 @@ This query filters for records where required allocation tags are NULL, isolatin
 
 **Objective:** Determine how and why the resource was created without tags.
 
-**Findings**
-- Resource launched via **AWS CLI**
-- CLI bypasses console-based tag prompts
-- API request **did not include required tags**
-- Tags were never removed — they were missing at creation
+The resource was launched via AWS CLI. The CLI bypasses console-based tag prompts, and the API request did not include the required tags. Tags were never removed. They were absent at creation. The CloudTrail event also identified the IAM principal responsible for the call, confirming this was a direct CLI session rather than an automated CI/CD pipeline role. That ruled out infrastructure-as-code drift as a contributing factor.
 
-This confirmed a **governance enforcement gap**, not user tampering.
+This confirmed a governance enforcement gap, not user tampering.
 
 ![RunInstances call without required tags](./screenshots/03%20-%20cloudtrail-forensics-runinstances-missing-tags-cli-launch.png)
 
@@ -144,90 +210,113 @@ This confirmed a **governance enforcement gap**, not user tampering.
 
 **Objective:** Determine whether the issue was isolated or systemic.
 
-CUR validation across services:
-
 | Service | Billed | Allocated | Gap |
-|---------|--------|-----------|-----|
-| EC2     | $220   | $182      |~$38 |
-| RDS     | $60    | $60       | $0  |
-| S3      | $35    | $20       | $15 |
+|---|---|---|---|
+| EC2 | $220 | $182 | ~$38 |
+| RDS | $60 | $60 | $0 |
+| S3 | $35 | $20 | $15 |
 
-~$38 (EC2) + $15 (S3) = $53 total unallocated spend. Minor variance is attributable to partial-day usage and CUR line-item granularity. All figures reconcile to invoice-level totals.
+Approximately $38 from EC2 plus $15 from S3 totals $53 in unallocated spend. Minor variance is attributable to partial-day usage and CUR line-item granularity. All figures reconcile to invoice-level totals.
 
-Note: Service-level rollups reflect CUR aggregation and rounding for partial-day usage. Line-item analysis confirmed $53 in unallocated spend, matching invoice-level billing records.
-
-While EC2 represented the largest gap, S3 confirmed the issue was **systemic**.
-
-**S3 Findings**
-- Two buckets missing the required `Environment` tag
-- Other tags present but insufficient for allocation
-- **$15/month** unallocated storage spend
+While EC2 represented the largest gap, S3 confirmed the issue was systemic. Two buckets were missing the required Environment tag. Project and Owner tags were present but incomplete allocation meant $15 per month in invisible storage spend. S3 storage charges appear as `TimedStorage-ByteHrs` line items in CUR, which was confirmed during query filtering to ensure complete service coverage.
 
 ![S3 tag compliance audit via CUR](./screenshots/04%20-%20cur-s3-tag-compliance-audit.png)
-
-Although Project and Owner tags were present, the missing Environment tag prevented Finance from allocating S3 costs, resulting in $15/month of invisible spend.
 
 ---
 
 ## Root Cause Analysis
 
-**Root cause:**  
-No enforcement at resource creation time.
+**Root cause: No enforcement at resource creation time.**
 
-If tagging depends on humans being perfect, it will fail.
-The gap was not a user error — it was a system design gap that required a system-level response.
+If tagging depends on humans being perfect, it will fail. This was not a user error. It was a system design gap that required a system-level response.
 
----
+**Key design decisions:**
 
-## Key Design Decisions
+CUR and Athena were used instead of Cost Explorer because they enable row-level tag inspection that Cost Explorer cannot surface. EventBridge and Lambda were chosen over AWS Config because they provide faster feedback loops, lower cost, and near-real-time detection. Alerting was prioritized over blocking to preserve engineering velocity, with SCP enforcement planned only after compliance stabilizes above 95%.
 
-Several implementation choices were intentional:
-
-- CUR + Athena was used instead of Cost Explorer to allow row-level inspection
-  of missing tags, which Cost Explorer cannot surface.
-- EventBridge + Lambda was chosen over AWS Config to enable near-real-time
-  detection with lower cost and faster feedback loops.
-- Alerting was prioritized over blocking to preserve engineering velocity
-  during early governance maturity stages.
-
-These decisions reflect a bias toward fast feedback, low friction,
-and defensible financial reporting.
+These decisions reflect a bias toward fast feedback, low friction, and defensible financial reporting.
 
 ---
 
-## Remediation & Controls
+## Remediation and Controls
 
-### Immediate Correction
-- Applied missing tags so Finance could close the month accurately
+**Immediate correction:** Applied missing tags so Finance could close the month accurately.
 
-### Permanent Prevention
-- CloudTrail for event logging
-- EventBridge for event capture
-- Lambda for tag validation
-- Slack alerts for fast remediation
+**Permanent prevention:**
 
-I reviewed findings from both Finance and Engineering perspectives to confirm reporting accuracy and avoid deployment friction.
-
----
-
-## Architecture Overview
 ```
-CloudTrail (event capture)
-    ↓
-EventBridge (rule-based filtering)
-    ↓
-Lambda (tag validation logic)
-    ↓
-Slack (near-real-time alert to Finance + resource owner)
+┌─────────────────────────────────────────────────────────┐
+│              AWS Resource Creation Event                 │
+│         (EC2 RunInstances, S3 CreateBucket, etc.)        │
+└─────────────────────────┬───────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                     AWS CloudTrail                       │
+│              Captures all API-level events               │
+└─────────────────────────┬───────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                  Amazon EventBridge                      │
+│         Rule filters for resource creation events        │
+└─────────────────────────┬───────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                   AWS Lambda                             │
+│     Validates required tags: Environment, Project,       │
+│     Owner — flags missing or non-compliant resources     │
+└──────────────┬──────────────────────┬───────────────────┘
+               │                      │
+               ▼                      ▼
+     ┌─────────────────┐    ┌──────────────────────┐
+     │  Slack: Finance  │    │  Slack: Resource Owner│
+     │  Alert Channel   │    │  Direct Notification  │
+     └─────────────────┘    └──────────────────────┘
 ```
 
-### Enforcement Philosophy
+**Enforcement philosophy: Alert before block.**
 
-**Alert, don’t block.**
+Non-compliant resources are surfaced immediately without breaking CI/CD pipelines or developer workflows. This preserves engineering velocity while maintaining financial accuracy.
 
-This approach preserves engineering velocity while maintaining financial accuracy.  
-Non-compliant resources are surfaced immediately without breaking CI/CD pipelines or developer workflows.
-Once compliance stabilizes above 95% for a sustained period, SCP enforcement could be introduced for greenfield accounts while grandfathering existing workflows.
+The progressive enforcement model works in three layers. AWS Organizations Tag Policies standardize required tag keys across all accounts without blocking deployments. EventBridge and Lambda detection surfaces non-compliant resources within minutes of creation, alerting Finance and the resource owner simultaneously. SCP enforcement is introduced for greenfield accounts only once compliance stabilizes above 95%, grandfathering existing workflows to avoid pipeline disruption.
+
+This is how real platform teams deploy governance: standardize first, detect second, enforce third.
+
+---
+
+### Step 1: EventBridge Rule
+
+The EventBridge rule `finops-tag-compliance-monitor` was configured on the default event bus to filter for RunInstances (EC2) and CreateBucket (S3) API calls via CloudTrail, targeting the `finops-tag-validator` Lambda function. Status: Enabled.
+
+*Review and create screen confirming rule name, event pattern, and Lambda target:*
+
+![EventBridge rule finops-tag-compliance-monitor — Enabled on default event bus, event pattern filtering aws.ec2 and aws.s3 RunInstances and CreateBucket via CloudTrail, target finops-tag-validator Lambda function](./screenshots/05a%20-%20eventbridge-rule-finops-monitor.png)
+
+---
+
+### Step 2: Lambda Validation Logic
+
+Lambda inspects the resource tags included in the API event payload and validates that Environment, Project, and Owner exist and are non-empty. The function handles both EC2 (RunInstances) and S3 (CreateBucket) creation events. Non-compliant resources trigger an alert containing the event name, missing tags, IAM principal, account ID, and region, giving both Finance and the resource owner everything needed to remediate immediately.
+
+*Function code showing the REQUIRED_TAGS list, EC2 and S3 validation branches, IAM principal extraction, and FINOPS TAG COMPLIANCE VIOLATION alert:*
+
+![Lambda function finops-tag-validator — REQUIRED_TAGS Environment Project Owner defined line 4, RunInstances and CreateBucket conditional branches, IAM principal and account ID extraction, FINOPS TAG COMPLIANCE VIOLATION print alert](./screenshots/05b%20-%20lambda-finops-tag-validator-code.png)
+
+*Runtime configuration confirming deployment:*
+
+![Lambda runtime settings — Python 3.14, handler lambda_function.lambda_handler, x86_64, Lambda Deployed status confirmed](./screenshots/05b-ii%20-%20lambda-settings.png)
+
+---
+
+### Step 3: End-to-End Test Execution
+
+The function was tested with a simulated untagged RunInstances event. All three required tags were correctly identified as missing. The FINOPS TAG COMPLIANCE VIOLATION alert fired with the expected IAM principal, account ID, and region. Execution time was 2.54ms.
+
+*Test event `test-untagged-ec2` showing execution succeeded, missing_tags confirmed as Environment, Project, and Owner, with full alert payload in the log output:*
+
+![Lambda test execution test-untagged-ec2 — Executing function succeeded, response missing_tags Environment Project Owner, log output FINOPS TAG COMPLIANCE VIOLATION RunInstances IAM principal arn:aws:iam::123456789012:user/developer-01 account 123456789012 region us-east-1](./screenshots/05c%20-%20lambda-test-execution-missing-tags.png)
 
 This aligns with progressive FinOps governance, where guardrails precede enforcement.
 
@@ -235,86 +324,174 @@ This aligns with progressive FinOps governance, where guardrails precede enforce
 
 ## Results and Impact
 
-### Financial Reporting Integrity
+| Metric | Before | After |
+|---|---|---|
+| Allocation coverage | ~82.5% | 100% |
+| Tag compliance rate | ~82.5% | 100% |
+| MTTD (mean time to detect) | ~30 days | Under 5 minutes |
+| Manual reconciliation | ~4 hours/month | Reduced significantly |
+| Finance escalations | Required monthly | Zero |
 
-- Allocation visibility restored from **~82.5% to 100%**
-- Finance closed monthly reports without escalation
+The approximately $636 per year figure represents spend that was correctly billed but invisible to allocation reports. This is a reporting integrity metric, not a cost savings figure. The goal was attribution accuracy, not spend reduction.
 
-### Metrics & Assumptions
-
-- Manual reconciliation time (~4 hours/month) is based on Finance validating
-  tag completeness, exporting reports, and coordinating remediation.
-- **Detection latency (~30 days) reflects monthly close cycles prior to automation.**
-- Allocation percentages are calculated using unblended CUR data to align
-  directly with invoice totals.
-
-These assumptions reflect common FinOps operating patterns and are conservative.
-
-### Quantified Outcomes
-
-- **$53/month** recurring allocation gap eliminated (**~$636/year**)
-- Detection latency reduced from **~30 days to under 5 minutes**
-- Manual Finance reconciliation reduced by **~4 hours per month**
-
-**Note:** The ~$636/year figure represents spend that was correctly billed but invisible to allocation reports. This is a reporting integrity metric, not a cost savings figure. The goal was attribution accuracy, not spend reduction.
-
-### Operational Impact
-
-- Finance closed monthly reports without escalation
-- Engineers received immediate, actionable feedback
-- Governance shifted from reactive cleanup to proactive prevention
+**Assumptions:** Manual reconciliation time of approximately 4 hours per month is based on Finance validating tag completeness, exporting reports, and coordinating remediation. Detection latency of approximately 30 days reflects monthly close cycles prior to automation. Allocation percentages use unblended CUR data to align with invoice totals.
 
 ---
 
-## What I Would Do Next in a Real Organization
+## Scaling to a Real Organization
 
-- Baseline tag compliance weekly using CUR
-- Track allocation coverage as a first-class FinOps KPI
-- Introduce SCP enforcement for **new (greenfield) accounts only** once compliance stabilizes
-- Add anomaly detection and shared dashboards for Finance and Engineering visibility
+In organizations with 10 to 500 or more AWS accounts, tag compliance gaps compound across every account simultaneously. The correct approach is to centralize CUR data via AWS Organizations into a single S3 bucket, then run the same Athena queries across the consolidated dataset to surface allocation gaps by account, business unit, and service. The EventBridge to Lambda to Slack pipeline scales identically — deploy once via SCP at the Organizations root level and every account inherits the governance control automatically.
 
----
-
-## Implementation Note
-
-This case emphasizes **investigation methodology and governance design** rather than code volume.
+Once allocation coverage reaches 95% consistently, the next step is formalizing chargeback and adding week-over-week anomaly detection to surface spend spikes before monthly close.
 
 ---
 
-## What’s in This Repository
+## FinOps Lifecycle Alignment
 
-- Operationally hardened example Lambda (Python, structured logging, error handling)
-- EventBridge rules (JSON)
-- Athena SQL queries with performance notes
-- Optional Terraform deployment templates
+| Phase | Activity in This Investigation |
+|---|---|
+| **Inform** | CUR and Athena cost visibility, allocation coverage metric, invoice validation baseline |
+| **Optimize** | Identification of $53 per month in unattributed spend, systemic gap confirmed across EC2 and S3 |
+| **Operate** | Event-driven tagging compliance control, real-time Slack alerting, progressive enforcement model |
 
-The value of this repository is the **reasoning and governance design**, not button clicks.
+The investigation started in Inform (what is the data telling us?), moved through Optimize (what is the gap and root cause?), and landed in Operate (what system prevents recurrence?). Optimization without Inform produces inaccurate savings models. Operate without Optimize produces governance controls targeting the wrong problem.
 
 ---
 
-## Scope and Limitations
+## What I Would Do Next
 
-- Sandbox AWS account used to control cost
-- Real AWS resources, billing data, and logs generated
-- Dollar values are intentionally small; failure patterns are production-real
-- Focus is on investigation, attribution, and governance design
+1. Centralize CUR across all accounts via AWS Organizations for consolidated visibility
+2. Establish weekly tag compliance baseline with allocation coverage tracked as a KPI
+3. Introduce SCP enforcement for greenfield accounts once compliance exceeds 95%
+4. Build a shared Finance and Engineering dashboard with real-time allocation coverage and anomaly alerts
+5. Layer in week-over-week cost anomaly detection once attribution is reliable
+6. Transition from showback to chargeback once Finance and Engineering trust the allocation model
 
-## Non-Goals
+---
 
-This investigation intentionally did not focus on:
+## Lessons Learned
 
-- Cost optimization or rightsizing
-- Reserved Instances or Savings Plans
-- Chargeback implementation details
+**Financial data must be treated as operational telemetry.** Without real-time visibility, allocation failures persist until monthly close. Cost data needs the same alerting discipline as infrastructure monitoring.
 
-The priority was restoring trust in allocation data.
-Optimization is only meaningful once ownership and attribution are reliable.
+**Tagging governance must exist at the system level.** Human process alone cannot maintain reliable allocation coverage. Engineers under deadline pressure will skip tags. The system must catch what humans miss, automatically and immediately.
+
+**Detection is more effective than enforcement early in governance maturity.** Immediate feedback loops change tagging behavior without introducing deployment friction. Blocking deployments too early creates shadow IT and pipeline workarounds. Earn compliance before enforcing it.
+
+**Attribution is the prerequisite for optimization.** Rightsizing recommendations, Savings Plans modeling, and chargeback frameworks all rely on reliable ownership metadata. Optimization applied to unattributed spend produces inaccurate projections and misaligned accountability.
+
+---
+
+## Skills Demonstrated
+
+| Skill Area | Detail |
+|---|---|
+| **Cloud FinOps** | Cost attribution and financial reconciliation |
+| **AWS Billing Data Engineering** | CUR analysis using Athena SQL |
+| **Cloud Governance** | Event-driven tag compliance architecture |
+| **Cloud Forensics** | CloudTrail investigation and IAM principal tracing |
+| **FinOps Operations** | Allocation coverage metrics and MTTD tracking |
+| **Technical Communication** | Finance-ready reporting from infrastructure findings |
+| **AI-Assisted Reporting** | Structured prompt engineering for executive output |
+
+---
+
+## Scope Rationale
+
+This investigation scoped deliberately to attribution and governance, not optimization. Cost optimization recommendations are only defensible once ownership and attribution are reliable. Recommending rightsizing or Reserved Instance purchases against unallocated spend produces inaccurate savings projections and incorrect team-level accountability. Attribution accuracy is the prerequisite. Optimization follows.
 
 ---
 
 ## Why This Matters
 
-Most allocation problems are not caught because Finance lacks the tooling to see them in real time, and Engineering lacks the incentive to tag consistently. This investigation showed me that governance design matters more than enforcement — surfacing problems immediately changes behavior faster than blocking deployments.
+Most allocation problems are not caught because Finance lacks the tooling to see them in real time and Engineering lacks the incentive to tag consistently. This investigation showed that governance design matters more than enforcement. Surfacing problems immediately changes behavior faster than blocking deployments.
 
-**Analysis note:**  
-Unblended costs were used to align directly with AWS invoice totals, which Finance treats as the authoritative source of truth. The architecture is AWS-native and the investigation methodology applies regardless of spend scale.
+The AI-assisted reporting step closes the final gap: translating investigation findings into executive-ready output at the speed the business requires, without replacing the analytical work that produced those findings.
+
+---
+
+## Appendix: AI-Assisted Investigation Reporting
+
+AI was used to accelerate report generation after the investigation was complete, not to perform the investigation. Every finding was produced by SQL analysis and CloudTrail forensics in Phases 1 through 5. AI converted validated findings into executive narrative format.
+
+**Workflow:**
+
+```
+SQL investigation output  →  Structured AI prompt  →  AI-generated report  →  Human validation  →  Finance-ready output
+```
+
+**Prompt used:**
+
+```
+You are a senior FinOps analyst preparing an internal investigation
+report for a Finance and Engineering audience.
+
+Produce a structured financial investigation report with these sections:
+1. Executive Summary (3 sentences maximum)
+2. Investigation Findings (what the data shows)
+3. Root Cause Analysis (why it happened)
+4. Financial Impact (percentage-based, with dollar context)
+5. Governance Failure (what control was missing)
+6. Remediation Plan (immediate fix and permanent prevention)
+
+Investigation data:
+- Total AWS spend: $315 | Unallocated: $53 (17%)
+- Affected: EC2 ($38 gap), S3 ($15 gap), RDS ($0 gap)
+- Root cause: CLI-launched resources missing required tags at creation
+- Detection: Athena SQL on CUR + CloudTrail RunInstances forensics
+- Fix: CloudTrail to EventBridge to Lambda to Slack pipeline
+- Outcome: Detection latency 30 days to under 5 minutes
+```
+
+**AI-generated report:**
+
+*Generated by Anthropic Claude using the prompt above. Every finding was validated against SQL and CloudTrail evidence in Phases 1 through 5 before inclusion.*
+
+---
+
+**INTERNAL FINOPS INVESTIGATION REPORT**
+*AWS Cost Allocation Gap | January 2026*
+
+**1. Executive Summary**
+
+A forensic investigation identified a 17% cost allocation gap across EC2 and S3, spend that was correctly billed but invisible to Finance reporting due to missing resource tags at provisioning time. The failure was a governance design gap, not user error. No enforcement mechanism existed to require tags at resource creation. An event-driven detection pipeline has been implemented, restoring 100% allocation visibility and reducing MTTD from 30 days to under 5 minutes.
+
+**2. Investigation Findings**
+
+CUR analysis via Athena confirmed $53 in unallocated spend across two services. EC2 represented the largest gap at approximately $38, with S3 contributing an additional $15. RDS showed full allocation compliance. Invoice validation confirmed all charges were accurate. The gap existed entirely in the attribution layer.
+
+**3. Root Cause Analysis**
+
+CloudTrail forensics traced the EC2 gap to a RunInstances API call via AWS CLI, which bypasses console tag prompts. No SCP or tag policy existed to reject untagged resource requests. Tags were never applied, not removed, confirming a provisioning-time enforcement gap rather than post-deployment drift or tampering.
+
+**4. Financial Impact**
+
+| Metric | Value |
+|---|---|
+| Allocation gap | 17% of total spend |
+| Monthly unallocated spend | $53 |
+| Annualized if unresolved | ~$636 |
+| Manual reconciliation reduced | ~4 hours/month |
+| MTTD before remediation | ~30 days |
+| MTTD after remediation | Under 5 minutes |
+
+In enterprise environments where monthly spend exceeds $2M to $10M across 50 to 200 accounts, the same allocation failure can hide hundreds of thousands of dollars in unattributed cost, making accurate chargeback, showback, and budget forecasting impossible.
+
+**5. Governance Failure**
+
+Three compounding control gaps allowed the issue to persist. There was no SCP or tag policy requiring tags before provisioning approval. There was no real-time monitoring to surface non-compliant resources at creation. There was no Finance visibility into allocation coverage as a tracked KPI. The absence of all three meant the gap could recur indefinitely, caught only during monthly close.
+
+**6. Remediation Plan**
+
+*Immediate:* Missing tags applied manually. Finance closed January with 100% allocation accuracy. No restatements required.
+
+*Permanent:* Event-driven pipeline (CloudTrail to EventBridge to Lambda to Slack) deployed. Engineers receive real-time alerts without deployment friction. SCP enforcement scoped to greenfield accounts once compliance exceeds 95%.
+
+*Next steps:* Weekly CUR-based tag compliance baseline, allocation coverage tracked as a first-class FinOps KPI, anomaly detection for week-over-week cost spikes.
+
+---
+
+*All figures validated against SQL and CloudTrail findings in Phases 1 through 5.*
+
+---
+
+> **Analysis note:** Unblended costs were used to align directly with AWS invoice totals, which Finance treats as the authoritative source of truth. The architecture is AWS-native and the investigation methodology applies regardless of spend scale.
