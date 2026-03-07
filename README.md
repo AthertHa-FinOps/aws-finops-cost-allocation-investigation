@@ -200,8 +200,6 @@ confirming this was a direct console action rather than an automated CI/CD pipel
 
 This confirmed a governance enforcement gap, not user tampering.
 
-![RunInstances call without required tags](./screenshots/03%20-%20cloudtrail-forensics-runinstances-missing-tags-cli-launch.png)
-
 ![CloudTrail event history filtered to RunInstances](./screenshots/03a%20-%20cloudtrail-event-history-runinstances.png)
 
 ![RunInstances event JSON showing missing tags](./screenshots/03b%20-%20cloudtrail-runinstances-json-cli-useragent.png)
