@@ -1,6 +1,6 @@
 # AWS FinOps Cost Allocation Investigation
 
-> This project documents a full FinOps investigation into an AWS cost allocation failure and the governance architecture built to prevent recurrence. Using Cost and Usage Reports (CUR), Athena SQL analysis, and CloudTrail forensics, I traced a 17% allocation gap to resources created without required tags via AWS CLI. The result was an event-driven governance control (CloudTrail to EventBridge to Lambda) that restored 100% cost attribution visibility and reduced detection latency from monthly reconciliation to under five minutes.
+> This project documents a full FinOps investigation into an AWS cost allocation failure and the governance architecture built to prevent recurrence. Using Cost and Usage Reports (CUR), Athena SQL analysis, and CloudTrail forensics, I traced a 17% allocation gap to resources created without required tags via direct console action. The result was an event-driven governance control (CloudTrail to EventBridge to Lambda) that restored 100% cost attribution visibility and reduced detection latency from monthly reconciliation to under five minutes.
 
 ---
 
@@ -8,7 +8,7 @@
 
 Investigated a **17% AWS cost allocation gap** caused by missing resource tags. Not overspend. Not a billing error. A reporting visibility failure.
 
-Used **CUR and Athena** to isolate unallocated spend and **CloudTrail forensics** to trace the root cause to CLI-launched resources that were created without required tags.
+Used **CUR and Athena** to isolate unallocated spend and **CloudTrail forensics** to trace the root cause to resources created via direct console action without required tags.
 
 Implemented an **event-driven governance control** (CloudTrail to EventBridge to Lambda) that restored 100% cost attribution visibility and reduced mean time to detect (MTTD) from approximately 30 days to under 5 minutes.
 
@@ -186,13 +186,17 @@ Unblended cost aligns with invoice totals, which Finance treats as the authorita
 
 ![CUR query isolating unallocated EC2 spend](./screenshots/02%20-%20cur-resource-isolation-missing-allocation-tags.png)
 
+Note: Query shown is a representative example of the analysis methodology. The screenshot below reflects the actual Athena results output from the investigation
+
 ---
 
 ## Phase 3: CloudTrail Forensic Investigation
 
 **Objective:** Determine how and why the resource was created without tags.
 
-The resource was launched via AWS CLI. The CLI bypasses console-based tag prompts, and the API request did not include the required tags. Tags were never removed. They were absent at creation. The CloudTrail event also identified the IAM principal responsible for the call, confirming this was a direct CLI session rather than an automated CI/CD pipeline role. That ruled out infrastructure-as-code drift as a contributing factor.
+Resource launched directly via the AWS Management Console. 
+Console launch bypassed any IaC pipeline or automated workflow, and the API request did not include the required tags. Tags were never removed. They were absent at creation. The CloudTrail event identified the IAM principal as a Root session with MFA, 
+confirming this was a direct console action rather than an automated CI/CD pipeline role. That ruled out infrastructure-as-code drift as a contributing factor.
 
 This confirmed a governance enforcement gap, not user tampering.
 
@@ -436,7 +440,7 @@ Produce a structured financial investigation report with these sections:
 Investigation data:
 - Total AWS spend: $315 | Unallocated: $53 (17%)
 - Affected: EC2 ($38 gap), S3 ($15 gap), RDS ($0 gap)
-- Root cause: CLI-launched resources missing required tags at creation
+- Root cause: Console-launched resources missing required tags at creation, no enforcement existed at provisioning time
 - Detection: Athena SQL on CUR + CloudTrail RunInstances forensics
 - Fix: CloudTrail to EventBridge to Lambda to Slack pipeline
 - Outcome: Detection latency 30 days to under 5 minutes
@@ -461,7 +465,7 @@ CUR analysis via Athena confirmed $53 in unallocated spend across two services. 
 
 **3. Root Cause Analysis**
 
-CloudTrail forensics traced the EC2 gap to a RunInstances API call via AWS CLI, which bypasses console tag prompts. No SCP or tag policy existed to reject untagged resource requests. Tags were never applied, not removed, confirming a provisioning-time enforcement gap rather than post-deployment drift or tampering.
+CloudTrail forensics traced the EC2 gap to a RunInstances API call made directly via the AWS Management Console. The console provides no tag enforcement at resource creation time. No SCP or tag policy existed to reject untagged resource requests. Tags were never applied, not removed, confirming a provisioning-time enforcement gap rather than post-deployment drift or tampering.
 
 **4. Financial Impact**
 
