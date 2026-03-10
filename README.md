@@ -236,6 +236,8 @@ The Name tag was present. The required allocation tags (Environment, Project, Ow
 
 This confirmed a governance enforcement gap, not user tampering.
 
+Note on instance type: The CloudTrail JSON shows t3.micro as the instance type recorded at launch time. The CUR billing data shows t3.large at $40 for the same resource ID. The discrepancy reflects a difference between what was recorded in the CloudTrail API event and what AWS billed for actual usage during the month. This portfolio uses CUR billing data as the authoritative source, consistent with how Finance treats it. The forensic value of the CloudTrail event is in confirming the IAM principal, the absence of required tags, and the console launch method, not the instance type field.
+
 ## Phase 4: Expanding Scope to S3
 
 Objective: Determine whether the issue was isolated or systemic.
