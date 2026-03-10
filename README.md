@@ -288,9 +288,9 @@ Lambda inspects the resource tags included in the API event payload and validate
 Full source: [`lambda/tag_validator.py`](lambda/tag_validator.py)
 
 Key implementation notes:
-- `REQUIRED_TAGS` list is the single source of truth — add or remove tags in one place
-- Slack webhook URL stored in Lambda environment variable, backed by AWS Secrets Manager in production — never hardcoded
-- S3 buckets alert immediately at creation since tags are applied separately — no grace period
+- `REQUIRED_TAGS` list is the single source of truth. Add or remove tags in one place
+- Slack webhook URL stored in Lambda environment variable, backed by AWS Secrets Manager in production. Never hardcoded
+- S3 buckets alert immediately at creation since tags are applied separately. No grace period
 - Design choice: alert fires without blocking the deployment, preserving CI/CD velocity
 
 ![Lambda function finops-tag-validator](screenshots/05b%20-%20lambda-finops-tag-validator-code.png)
@@ -321,21 +321,21 @@ Assumptions: Manual reconciliation time of approximately 4 hours per month is ba
 
 ## Scaling to a Real Organization
 
-In organizations with 10 to 500 or more AWS accounts, tag compliance gaps compound across every account simultaneously. Centralize CUR via AWS Organizations into a single S3 bucket, run the same Athena queries across the consolidated dataset, and deploy the EventBridge to Lambda pipeline once via SCP at the Organizations root — every account inherits the governance control automatically.
+In organizations with 10 to 500 or more AWS accounts, tag compliance gaps compound across every account simultaneously. Centralize CUR via AWS Organizations into a single S3 bucket, run the same Athena queries across the consolidated dataset, and deploy the EventBridge to Lambda pipeline once via SCP at the Organizations root. Every account inherits the governance control automatically.
 
 ### What Breaks at Scale
 
 Three failure points that the sandbox did not surface:
 
-**Lambda concurrency limits.** In extreme burst scenarios — hundreds of simultaneous RunInstances events during large infrastructure provisioning — Lambda can throttle. SQS queuing between EventBridge and Lambda with a Dead Letter Queue is an optional hardening step for high-volume deployments. For most organizations, EventBridge → Lambda handles the load without buffering.
+**Lambda concurrency limits.** In extreme burst scenarios (hundreds of simultaneous RunInstances events during large infrastructure provisioning) Lambda can throttle. SQS queuing between EventBridge and Lambda with a Dead Letter Queue is an optional hardening step for high-volume deployments. For most organizations, EventBridge to Lambda handles the load without buffering.
 
 **EventBridge rule limits.** AWS enforces 300 rules per event bus per account. At scale, use a dedicated event bus per account forwarding to a central compliance bus.
 
 **CUR partition management.** A consolidated CUR dataset across 100+ accounts at $2M to $10M/month requires partitioning by account ID, service, and billing month. Without it, full-table scans become expensive and slow.
 
-**Slack alert implementation.** Lambda posts to Slack via an incoming webhook. The webhook URL is stored as a Lambda environment variable backed by AWS Secrets Manager — never hardcoded. In production, retry logic handles transient Slack API failures. See [`lambda/tag_validator.py`](lambda/tag_validator.py) for the full implementation.
+**Slack alert implementation.** Lambda posts to Slack via an incoming webhook. The webhook URL is stored as a Lambda environment variable backed by AWS Secrets Manager. Never hardcoded. In production, retry logic handles transient Slack API failures. See [`lambda/tag_validator.py`](lambda/tag_validator.py) for the full implementation.
 
-These failure points define the engineering work to harden the architecture for production — they do not change the core design.
+These failure points define the engineering work to harden the architecture for production. They do not change the core design.
 
 ## Multi-Account Architecture Extension
 
@@ -378,7 +378,7 @@ These failure points define the engineering work to harden the architecture for 
                       └──────────────────────┘
 ```
 
-Key decisions: Centralized CUR eliminates per-account configuration. Organizations CloudTrail ensures no account is missed in forensic investigation. SCP at root means every new account inherits the control automatically. The same Phase 2 Athena SQL runs unchanged — `line_item_usage_account_id` surfaces which account owns each gap.
+Key decisions: Centralized CUR eliminates per-account configuration. Organizations CloudTrail ensures no account is missed in forensic investigation. SCP at root means every new account inherits the control automatically. The same Phase 2 Athena SQL runs unchanged. The `line_item_usage_account_id` column surfaces which account owns each gap.
 
 ## FinOps Lifecycle Alignment
 
@@ -400,10 +400,10 @@ The investigation started in Inform (what is the data telling us?), moved throug
 
 **Cost optimization (once attribution is reliable)**
 
-Attribution accuracy is the prerequisite for optimization. Unattributed spend cannot be rightsized, committed, or charged back responsibly — ownership metadata must exist first.
+Attribution accuracy is the prerequisite for optimization. Unattributed spend cannot be rightsized, committed, or charged back responsibly. Ownership metadata must exist first.
 
 - **EC2 rightsizing:** Cost Explorer recommendations become actionable once resources are tagged by owner and workload
-- **Savings Plans / RI analysis:** Commitment modeling against untagged spend produces incorrect coverage recommendations — full attribution enables accurate break-even analysis
+- **Savings Plans / RI analysis:** Commitment modeling against untagged spend produces incorrect coverage recommendations. Full attribution enables accurate break-even analysis
 - **Anomaly detection:** Week-over-week Athena queries against the 4-week rolling average by service and owner, alerting Finance before monthly close
 - **Chargeback transition:** Showback first, chargeback once tag coverage exceeds 95% and Finance and Engineering align on exception handling
 
