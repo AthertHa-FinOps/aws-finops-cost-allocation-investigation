@@ -1,12 +1,12 @@
 # FinOps Investigation: AWS Cost Allocation Failure and Tag Governance Remediation
 
-> **30-second read:** Finance found a 17% AWS cost allocation gap. I traced it to untagged resources launched via console, then built an event-driven governance pipeline (CloudTrail → EventBridge → Lambda) that cut detection latency from 30 days to under 5 minutes.
+> **30-second read:** Finance found a 17% AWS cost allocation gap. I traced it to resources launched via the AWS console without required tags, then built an event-driven governance pipeline (CloudTrail to EventBridge to Lambda) that cut detection latency from 30 days to under 5 minutes.
 
 ---
 
 ## Project Summary
 
-Investigated a 17% AWS cost allocation gap using CUR and Athena SQL. CloudTrail forensics traced the issue to console-launched resources missing required tags at creation. Built an event-driven governance pipeline (CloudTrail → EventBridge → Lambda) to detect non-compliant resources in near real time. Result: allocation coverage restored to 100% and detection latency reduced from ~30 days to under 5 minutes.
+Investigated a 17% AWS cost allocation gap using CUR and Athena SQL. CloudTrail forensics traced the issue to console-launched resources missing required tags at creation. Built an event-driven governance pipeline (CloudTrail to EventBridge to Lambda) to detect non-compliant resources in near-real-time. Result: allocation coverage restored to 100% and detection latency reduced from approximately 30 days to under 5 minutes.
 
 ---
 
@@ -14,9 +14,9 @@ Investigated a 17% AWS cost allocation gap using CUR and Athena SQL. CloudTrail 
 
 | Skill | Evidence |
 |---|---|
-| AWS CUR analysis with Athena | Phases 1–4: NULL tag filtering, row-level resource attribution |
+| AWS CUR analysis with Athena | Phases 1 through 4: NULL tag filtering, row-level resource attribution |
 | CloudTrail forensic investigation | Phase 3: IAM principal, UserAgent, tagSpecificationSet chain |
-| Event-driven governance architecture | CloudTrail → EventBridge → Lambda pipeline |
+| Event-driven governance architecture | CloudTrail to EventBridge to Lambda pipeline |
 | Cloud cost allocation | $53 unallocated spend isolated and attributed |
 | Tagging compliance automation | Lambda validator with REQUIRED_TAGS single source of truth |
 | Finance-facing communication | Executive snapshot, AI-assisted report, chargeback sequencing |
@@ -43,9 +43,9 @@ Investigated a 17% AWS cost allocation gap using CUR and Athena SQL. CloudTrail 
 
 ## Architecture
 
-![FinOps Tag Governance Pipeline — CloudTrail to EventBridge to Lambda to Slack](screenshots/finops-architecture-v2.svg)
+![FinOps Tag Governance Pipeline: CloudTrail to EventBridge to Lambda to Slack](screenshots/finops-architecture-v2.svg)
 
-**Pipeline flow:** EC2/S3 resource creation → CloudTrail captures API call → EventBridge rule matches RunInstances/CreateBucket → Lambda validates Environment, Project, Owner tags → Slack alert to Finance channel and resource owner.
+**Pipeline flow:** EC2/S3 resource creation triggers CloudTrail to capture the API call. EventBridge matches RunInstances and CreateBucket events. Lambda validates Environment, Project, and Owner tags. Slack alerts fire to the Finance channel and the resource owner simultaneously.
 
 ```
 EC2 RunInstances / S3 CreateBucket
@@ -101,11 +101,11 @@ EC2 RunInstances / S3 CreateBucket
 
 | Phase | Objective | Tooling | Outcome |
 |---|---|---|---|
-| Invoice Validation | Confirm billing accuracy | Cost Explorer, CUR | Billing ruled out |
+| Invoice Validation | Confirm billing accuracy | Cost Explorer, CUR | Billing error ruled out |
 | Resource Isolation | Identify unallocated spend | Athena (CUR) | EC2 and S3 gaps isolated |
 | Forensics | Identify creation source | CloudTrail | Untagged console launch confirmed |
 | Scope Expansion | Check other services | Athena (CUR) | Systemic issue confirmed |
-| Remediation | Prevent recurrence | EventBridge, Lambda | Near-real-time detection |
+| Remediation | Prevent recurrence | EventBridge, Lambda | Near-real-time detection live |
 | AI-Assisted Reporting | Generate executive report | Anthropic Claude | Finance-ready report produced |
 
 ---
@@ -172,7 +172,7 @@ The Environment, Project, and Owner tags were activated as Cost Allocation Tags 
 
 Filtering CUR records for NULL required tags identified PROD-WEB-SERVER-01 (instance ID `i-0c9cfb67280fe44ee`, type t3.large) as the source of the EC2 gap. Monthly cost: $40. Partial-month usage indicated a mid-month creation event.
 
-> **Lab Environment Note:** All Athena queries in this investigation use hardcoded literal values to simulate realistic enterprise billing data. The actual lab instance ran as a t3.micro to minimize costs. The t3.large instance type and $40 monthly cost visible in the screenshots are simulated values. The investigation methodology — NULL tag filtering, resource ID lookups, and the CloudTrail forensic chain — is identical to what would run against a live production CUR dataset. This note applies to all screenshots in Phases 1 through 4.
+> **Lab Environment Note:** All Athena queries in this investigation use hardcoded literal values to simulate realistic enterprise billing data. The actual lab instance ran as a t3.micro to minimize costs. The t3.large instance type and $40 monthly cost visible in the screenshots are simulated values. The investigation methodology (NULL tag filtering, resource ID lookups, and the CloudTrail forensic chain) is identical to what would run against a live production CUR dataset. This note applies to all screenshots in Phases 1 through 4.
 
 **SQL: Resource Verification Query**
 
@@ -197,9 +197,9 @@ LIMIT 1;
 |---|---|---|---|---|---|---|
 | PROD-WEB-SERVER-01 | i-0c9cfb67280fe44ee | t3.large | 40.0 | NULL | NULL | NULL |
 
-![Athena CUR resource verification query — PROD-WEB-SERVER-01 with NULL allocation tags](screenshots/03%20-%20cloudtrail-forensics-runinstances-missing-tags-cli-launch.png)
+![Athena CUR resource verification query showing PROD-WEB-SERVER-01 with NULL allocation tags](screenshots/03%20-%20cloudtrail-forensics-runinstances-missing-tags-cli-launch.png)
 
-> **Note on screenshot filename:** The filename for this image was created during an earlier phase of the investigation and references CloudTrail and CLI launch. The actual content is an Athena CUR SQL query (Phase 2 resource isolation). CloudTrail forensic evidence is in the 03a and 03b screenshots. The phrase "cli-launch" in the filename is also incorrect — CloudTrail confirms console launch via Chrome browser UserAgent, documented in Phase 3. The investigation findings are unaffected; the filename is a labeling artifact.
+> **Note on screenshot filename:** The filename for this image was created during an earlier phase of the investigation and references CloudTrail and CLI launch. The actual content is an Athena CUR SQL query for Phase 2 resource isolation. CloudTrail forensic evidence is in screenshots 03a and 03b. The phrase "cli-launch" in the filename is also incorrect because CloudTrail confirms console launch via a Chrome browser UserAgent string, documented in Phase 3. The investigation findings are unaffected. The filename is a labeling artifact from an earlier draft.
 
 ---
 
@@ -211,32 +211,32 @@ With the untagged resource identified in Phase 2 (instance ID `i-0c9cfb67280fe44
 
 ### Step 1: CloudTrail Event Record (Full JSON)
 
-The CloudTrail Event history was filtered to `RunInstances` and the full JSON event record was opened for `i-0c9cfb67280fe44ee`. This is the primary forensic document: it confirms the IAM principal, the launch timestamp, the user agent (console vs. CLI vs. SDK), and the complete tag specification submitted with the API call.
+The CloudTrail Event history was filtered to `RunInstances` and the full JSON event record was opened for `i-0c9cfb67280fe44ee`. This is the primary forensic document. It confirms the IAM principal, the launch timestamp, the user agent (console vs. CLI vs. SDK), and the complete tag specification submitted with the API call.
 
-![CloudTrail RunInstances event record: Root IAM principal, timestamp 2026-01-22T19:00:13Z, awsRegion us-east-2, instanceType t3.micro, Chrome browser UserAgent confirming console launch](screenshots/03a%20-%20cloudtrail-event-history-runinstances.png)
+![CloudTrail RunInstances event record showing Root IAM principal, timestamp 2026-01-22T19:00:13Z, awsRegion us-east-2, instanceType t3.micro, and Chrome browser UserAgent confirming console launch](screenshots/03a%20-%20cloudtrail-event-history-runinstances.png)
 
-> **⚠️ Instance type discrepancy: t3.micro (CloudTrail) vs. t3.large (CUR)**
-> CloudTrail records t3.micro because that is the actual instance type launched. The CUR data shows t3.large because the billing figures were hardcoded in the Athena query to simulate enterprise spend, as noted in the Lab Environment Note in Phase 2. The forensic value here is the IAM principal (Root + MFA), the console UserAgent, and the absent required tags — not the instance type field.
+> **Instance type discrepancy: t3.micro in CloudTrail vs. t3.large in CUR.**
+> CloudTrail records t3.micro because that is the actual instance type launched. The CUR data shows t3.large because the billing figures were hardcoded in the Athena query to simulate enterprise spend, as noted in the Lab Environment Note in Phase 2. The forensic value of this event record is the IAM principal (Root with MFA), the console UserAgent, and the absent required tags. The instance type field is not relevant to the forensic chain.
 
 ### Step 2: Tag Specification Evidence (Missing Required Tags)
 
-![CloudTrail RunInstances tagSpecificationSet: Name tag only (PROD-WEB-SERVER-01), no Environment, Project, or Owner tags present](screenshots/03b%20-%20cloudtrail-runinstances-json-cli-useragent.png)
+![CloudTrail RunInstances tagSpecificationSet showing the Name tag only for PROD-WEB-SERVER-01 with no Environment, Project, or Owner tags present](screenshots/03b%20-%20cloudtrail-runinstances-json-cli-useragent.png)
 
-Scrolling deeper into the same CloudTrail JSON event record surfaces the `tagSpecificationSet`. Only the `Name` tag (`PROD-WEB-SERVER-01`) was submitted with the API call. `Environment`, `Project`, and `Owner` were not included. This confirms tags were absent at creation — they were never submitted with the API call, not applied and then later removed.
+Scrolling deeper into the same CloudTrail JSON event record surfaces the `tagSpecificationSet`. Only the `Name` tag (`PROD-WEB-SERVER-01`) was submitted with the API call. `Environment`, `Project`, and `Owner` were not included. This confirms tags were absent at creation. They were never submitted with the API call, not applied and then later removed.
 
-> **Note on screenshot filename:** The filename for this image references "cli-useragent" on two counts that require clarification. First, the launch method was console, not CLI: the UserAgent field visible in the 03a screenshot is a Chrome/Windows browser string (`Mozilla/5.0 ... Chrome/144.0.0.0`), not an AWS CLI string (`aws-cli/2.x`). Second, this screenshot shows the `tagSpecificationSet` section of the CloudTrail JSON (lines 56–63), not the `userAgent` field. The filename is a labeling artifact from an earlier draft. The forensic evidence itself — Name tag only, required tags absent — is accurate and unambiguous.
+> **Note on screenshot filename:** The filename for this image references "cli-useragent" on two counts that require clarification. First, the launch method was console, not CLI. The UserAgent field visible in screenshot 03a is a Chrome/Windows browser string (`Mozilla/5.0 ... Chrome/144.0.0.0`), not an AWS CLI string (`aws-cli/2.x`). Second, this screenshot shows the `tagSpecificationSet` section of the CloudTrail JSON (lines 56 through 63), not the `userAgent` field. The filename is a labeling artifact from an earlier draft. The forensic evidence itself (Name tag only, required tags absent) is accurate and unambiguous.
 
 ### Forensic Evidence Chain Summary
 
 | Evidence | Finding |
 |---|---|
 | CUR Phase 2 (03) | Athena query confirming untagged resource, instance ID, and $40 monthly cost |
-| CloudTrail JSON, top half (03a) | Root + MFA IAM principal, **Chrome browser UserAgent confirming console launch**, awsRegion us-east-2, creation timestamp 2026-01-22T19:00:13Z |
-| CloudTrail JSON, tag section (03b) | `tagSpecificationSet` contained `Name` only; Environment, Project, Owner absent at creation |
+| CloudTrail JSON, top half (03a) | Root with MFA IAM principal, Chrome browser UserAgent confirming console launch, awsRegion us-east-2, creation timestamp 2026-01-22T19:00:13Z |
+| CloudTrail JSON, tag section (03b) | `tagSpecificationSet` contained `Name` tag only; Environment, Project, and Owner were absent at creation |
 
-> **CUR isolated the resource. CloudTrail confirmed who created it, how, and that required tags were never submitted. The Chrome browser UserAgent confirmed console origin — not CLI, not SDK. The `tagSpecificationSet` confirmed a provisioning-time enforcement gap with no drift and no tampering. Root cause confirmed.**
+> **CUR isolated the resource. CloudTrail confirmed who created it, how it was created, and that required tags were never submitted. The Chrome browser UserAgent confirmed console origin. Not CLI, not SDK. The `tagSpecificationSet` confirmed a provisioning-time enforcement gap with no drift and no tampering. Root cause confirmed.**
 
-The resource was launched directly via the AWS Management Console. Console launch bypassed any IaC pipeline or automated workflow. The IAM principal was a Root session with MFA, used intentionally in sandbox to simulate a worst-case governance bypass scenario. In production environments, root access is restricted and not used for routine infrastructure provisioning — a separate finding in any real security review.
+The resource was launched directly via the AWS Management Console. Console launch bypassed any IaC pipeline or automated workflow. The IAM principal was a Root session with MFA, used intentionally in the sandbox to simulate a worst-case governance bypass scenario. In production environments, root access is restricted and not used for routine infrastructure provisioning. This would be a separate finding in any real security review.
 
 **Key evidence from the CloudTrail event:**
 
@@ -271,7 +271,7 @@ The resource was launched directly via the AWS Management Console. Console launc
 }
 ```
 
-The `Name` tag was present. `Environment`, `Project`, and `Owner` were not. The `userAgent` is a Chrome browser string, confirming console launch. The `instanceType` field shows `t3.micro`, consistent with the actual instance launched. The forensic conclusion is unchanged: required tags were absent at creation time, via direct console action.
+The `Name` tag was present. `Environment`, `Project`, and `Owner` were not. The `userAgent` is a Chrome browser string confirming console launch. The `instanceType` field shows `t3.micro`, consistent with the actual instance launched. The forensic conclusion is unchanged: required tags were absent at creation time via direct console action.
 
 ---
 
@@ -285,9 +285,11 @@ The `Name` tag was present. `Environment`, `Project`, and `Owner` were not. The 
 | RDS | $60 | $60 | $0 |
 | S3 | $35 | $20 | $15 |
 
-> The EC2 gap is reported as ~$38 in the service breakdown versus $40 in the resource-level CUR output. This variance is attributable to partial-month usage and CUR line-item rounding across billing periods. Both figures reconcile to invoice-level totals.
+> The EC2 gap is reported as approximately $38 in the service breakdown versus $40 in the resource-level CUR output. This variance is attributable to partial-month usage and CUR line-item rounding across billing periods. Both figures reconcile to invoice-level totals.
 
-While EC2 represented the largest gap, S3 confirmed the issue was systemic. Two buckets were missing the required `Environment` tag. `Project` and `Owner` were present, but incomplete allocation meant $15/month in invisible storage spend.
+While EC2 represented the largest gap, S3 confirmed the issue was systemic. The two S3 buckets in this lab simulation are represented with partial tags to demonstrate a key compliance principle: partial tagging produces the same Finance-invisible result as no tagging. Both buckets are missing the required `Environment` tag. Even with `Project` and `Owner` present, the missing `Environment` tag meant $15 per month in storage spend that Finance could not allocate to any cost centre.
+
+> **Lab simulation note on S3 tag data:** The actual lab buckets were created with no tags at all, consistent with the EC2 instance. The CUR simulation in Image 6 was deliberately constructed with partial tags (Project and Owner present, Environment absent) to illustrate a critical FinOps principle: a resource with two of three required tags is just as invisible to Finance reporting as a resource with none. The simulation data was chosen because it represents the more common and more instructive real-world scenario. The underlying finding is unchanged either way.
 
 | Resource ID | Monthly Cost | Environment | Project | Owner |
 |---|---|---|---|---|
@@ -295,9 +297,11 @@ While EC2 represented the largest gap, S3 confirmed the issue was systemic. Two 
 | bucket-temp-data | 8.0 | NULL | web-app | team-engineering |
 | **TOTAL UNALLOCATED** | **15.0** | --- | --- | --- |
 
-![S3 tag compliance audit via CUR](screenshots/04%20-%20cur-s3-tag-compliance-audit.png)
+![S3 tag compliance audit via CUR showing bucket-logs-arch and bucket-temp-data with NULL Environment tags](screenshots/04%20-%20cur-s3-tag-compliance-audit.png)
 
 > **Note on this query:** S3 results are represented using a hardcoded `VALUES` query in Athena. See the Lab Environment Note in Phase 2 for full context.
+
+> **Note on S3 tagging behavior in production:** The S3 CreateBucket API does not accept tags inline in the creation request the same way EC2 does. Tags on S3 buckets are typically applied via a separate PutBucketTagging call after the bucket exists. This means a CreateBucket event in CloudTrail will always show an empty tag list in the request parameters, even for buckets that will eventually be tagged correctly. In a production implementation, the EventBridge rule would monitor both CreateBucket and PutBucketTagging events, or a time-bounded compliance check would verify tag status shortly after bucket creation. This is documented in What I Would Do Next.
 
 ---
 
@@ -345,7 +349,7 @@ This pattern returns one row per resource per billing month, ranked by cost. The
 
 If tagging depends on humans being perfect, it will eventually fail. This was not a user error. It was a system design gap that required a system-level response.
 
-EventBridge and Lambda were chosen over AWS Config because they provide near-real-time detection. Config rules operate on a minutes-to-hours evaluation cycle. EventBridge fires within seconds of the API call. This also avoids Config recorder charges for every resource state change.
+EventBridge and Lambda were chosen over AWS Config because they provide near-real-time detection. Config rules operate on a minutes-to-hours evaluation cycle. EventBridge fires within seconds of the API call. This approach also avoids Config recorder charges for every resource state change.
 
 Alerting was prioritized over blocking to preserve engineering velocity. SCP enforcement is planned only after compliance stabilizes above 95%. This reflects a bias toward fast feedback, low friction, and defensible financial reporting.
 
@@ -355,7 +359,7 @@ Alerting was prioritized over blocking to preserve engineering velocity. SCP enf
 
 **Immediate correction:** Applied missing tags so Finance could close the month accurately.
 
-**Permanent prevention — the progressive enforcement model:**
+**Permanent prevention: the progressive enforcement model**
 
 1. **Tag Policies** standardize required tag keys across all accounts without blocking deployments
 2. **EventBridge + Lambda** detect violations within minutes of resource creation and alert Finance and the resource owner simultaneously
@@ -369,14 +373,16 @@ This is how real platform teams deploy governance: standardize first, detect sec
 
 The EventBridge rule `finops-tag-compliance-monitor` was configured on the default event bus. It filters for `RunInstances` (EC2) and `CreateBucket` (S3) API calls via CloudTrail and targets the `finops-tag-validator` Lambda function. Status: **Enabled**.
 
-![EventBridge Rule: finops-tag-compliance-monitor — source aws.ec2/aws.s3, RunInstances/CreateBucket, targeting finops-tag-validator Lambda in us-east-1](screenshots/05a-eventbridge-rule.png)
+![EventBridge Rule finops-tag-compliance-monitor showing source aws.ec2 and aws.s3, RunInstances and CreateBucket event names, and finops-tag-validator Lambda target in us-east-1](screenshots/05a-eventbridge-rule.png)
 
-> **Lab region note — production deployment pattern:**
+> **Lab region note and production deployment pattern:**
 > The CloudTrail forensic evidence (Phase 3, screenshot 03a) shows the documented incident occurred in `us-east-2`. The EventBridge rule and Lambda function visible in this screenshot are deployed in `us-east-1`. Amazon EventBridge default event buses are regional, so a production deployment requires the rule in every active region. Two standard patterns handle this:
-> - **Per-region deployment:** Deploy the EventBridge rule and Lambda to each active region via IaC (Terraform, CloudFormation StackSets). Standard approach for organizations with 3–5 active regions.
-> - **Central event bus pattern:** Forward regional CloudTrail events to a central EventBridge bus in a dedicated billing or security account, then apply a single rule set. Recommended pattern for organizations managing 10+ accounts.
 >
-> The governance logic — EventBridge pattern, Lambda validation, alert payload — is production-ready. Multi-region deployment via IaC is the next step documented in the What I Would Do Next section.
+> **Per-region deployment:** Deploy the EventBridge rule and Lambda to each active region via IaC (Terraform or CloudFormation StackSets). Standard approach for organizations with 3 to 5 active regions.
+>
+> **Central event bus pattern:** Forward regional CloudTrail events to a central EventBridge bus in a dedicated billing or security account, then apply a single rule set. Recommended pattern for organizations managing 10 or more accounts.
+>
+> The governance logic (EventBridge pattern, Lambda validation, alert payload) is production-ready. Multi-region deployment via IaC is the next step documented in the What I Would Do Next section.
 
 ---
 
@@ -392,13 +398,20 @@ if missing:
     return {'statusCode': 200, 'missing_tags': missing}
 ```
 
-`REQUIRED_TAGS` is the single source of truth — adding or removing a required tag means changing one line.
+`REQUIRED_TAGS` is the single source of truth. Adding or removing a required tag means changing one line.
 
-![Lambda function finops-tag-validator: source code showing REQUIRED_TAGS, event parsing for RunInstances and CreateBucket, missing tag detection, and alert payload construction](screenshots/05b%20-%20lambda-finops-tag-validator-code.png)
+![Lambda function finops-tag-validator showing REQUIRED_TAGS list, event parsing logic for RunInstances and CreateBucket, missing tag detection, and alert payload construction](screenshots/05b%20-%20lambda-finops-tag-validator-code.png)
 
-![Lambda runtime settings: Python 3.14, handler lambda_function.lambda_handler, x86_64 architecture, Lambda Deployed status confirmed](screenshots/05b-ii%20-%20lambda-settings.png)
+![Lambda runtime settings showing Python 3.14, handler lambda_function.lambda_handler, x86_64 architecture, and Lambda Deployed status confirmed](screenshots/05b-ii%20-%20lambda-settings.png)
 
-> **Implementation notes:** In production, the alert routes to Slack via webhook URL stored in AWS Secrets Manager (not hardcoded). S3 alerts fire immediately at creation since tags are applied separately. Alert fires without blocking deployment, preserving CI/CD velocity. For high-volume burst scenarios, add SQS + DLQ between EventBridge and Lambda to handle concurrency.
+> **Implementation notes:** `boto3` is imported in the function for the production Slack webhook integration, where it would retrieve the webhook URL from AWS Secrets Manager using `boto3.client('secretsmanager')`. In this lab environment the alert routes to CloudWatch Logs via `print()` since no Slack workspace is connected. The webhook URL must never be hardcoded. Alert fires without blocking deployment, preserving CI/CD velocity. For high-volume burst scenarios, add SQS + DLQ between EventBridge and Lambda to handle concurrency spikes above the default 1,000 concurrent execution limit per account per region.
+
+> **Production tag_list pattern:** The lab function uses assignment (`tag_list =`) inside the tagSpecificationSet loop, which is sufficient when a single resourceType entry is submitted in the API call. In a production implementation where multiple resourceType entries may be present in a single RunInstances call, use append (`tag_list +=`) to ensure tags across all entries are captured:
+>
+> ```python
+> for item in items:
+>     tag_list += [t['key'] for t in item.get('tags', [])]
+> ```
 
 > **Note on Python version:** The Lambda function was deployed on Python 3.14. The function logic is compatible with Python 3.12 or later. See [AWS Lambda runtimes documentation](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) for current supported versions.
 
@@ -408,9 +421,9 @@ if missing:
 
 The function was tested with a simulated untagged `RunInstances` event. All three required tags were correctly identified as missing. The `FINOPS TAG COMPLIANCE VIOLATION` alert fired correctly. Execution time: **2.54ms**.
 
-![Lambda test result: statusCode 200, missing_tags Environment/Project/Owner, FINOPS TAG COMPLIANCE VIOLATION alert in log output](screenshots/05c-lambda-test-result.png)
+![Lambda test result showing statusCode 200, missing_tags for Environment, Project, and Owner, and the FINOPS TAG COMPLIANCE VIOLATION alert in the log output](screenshots/05c-lambda-test-result.png)
 
-> **Note on test event values:** The test event uses a synthetic IAM principal (`arn:aws:iam::123456789012:user/developer-01`) and placeholder account ID (`123456789012`) rather than reproducing the Root session from the forensic chain. This is intentional — reproducing real Root credentials in a test event is a security anti-pattern. `123456789012` is a well-recognized AWS documentation placeholder. The test validates function logic, not actor identity.
+> **Note on test event values:** The test event uses a synthetic IAM principal (`arn:aws:iam::123456789012:user/developer-01`) and placeholder account ID (`123456789012`) rather than reproducing the Root session from the forensic chain. This is intentional because reproducing real Root credentials in a test event is a security anti-pattern. `123456789012` is a well-recognized AWS documentation placeholder. The test validates function logic, not actor identity.
 
 ---
 
@@ -430,9 +443,9 @@ The function was tested with a simulated untagged `RunInstances` event. All thre
 
 ## Optimization Opportunity (Sequential to Attribution, Not Parallel)
 
-With attribution restored, the data now supports a clear optimization path:
+With attribution restored, the data now supports a clear optimization path.
 
-**Rightsizing:** Pull 2-week CloudWatch CPU/memory utilization. Downsize one tier for any resource consistently below 20% utilization. Owner accountability is only possible because attribution is now complete.
+**Rightsizing:** Pull 2-week CloudWatch CPU and memory utilization. Downsize one tier for any resource consistently below 20% utilization. Owner accountability is only possible because attribution is now complete.
 
 **Savings Plans:** Run Cost Explorer coverage report filtered by `Environment` and `Project` to identify commitment candidates. Before full tag coverage, any break-even modeling produced inaccurate recommendations.
 
@@ -468,11 +481,11 @@ With attribution restored, the data now supports a clear optimization path:
                   │
         ┌─────────┴──────────┐
         ▼                    ▼
-┌──────────────┐    ┌──────────────────────────┐
+┌──────────────┐    ┌───────────────────────────┐
 │ Athena SQL   │    │  EventBridge + Lambda     │
 │ Consolidated │    │  Deployed via IaC per     │
 │ CUR queries  │    │  account AND per region   │
-└──────────────┘    └────────────┬─────────────┘
+└──────────────┘    └────────────┬──────────────┘
                                  ▼
                       ┌──────────────────────┐
                       │  Slack: Finance +    │
@@ -481,9 +494,9 @@ With attribution restored, the data now supports a clear optimization path:
 ```
 
 **Three production failure points a sandbox does not surface:**
-- **Lambda concurrency:** Default limit is 1,000/account/region. Add SQS + DLQ for burst hardening.
+- **Lambda concurrency:** Default limit is 1,000 per account per region. Add SQS + DLQ for burst hardening in environments with high-volume provisioning events.
 - **EventBridge rule limits:** 300 rules per event bus per account. Use dedicated buses at scale.
-- **CUR partition management:** 100+ accounts at $2M–$10M/month requires partitioning by account ID, service, and billing month or full-table scans become expensive.
+- **CUR partition management:** 100 or more accounts at $2M to $10M per month requires partitioning by account ID, service, and billing month. Without it, full-table scans become expensive.
 
 ---
 
@@ -500,10 +513,10 @@ The tagging governance control implemented here sits within the FinOps Platform 
 **Monthly operating cadence:**
 
 ```
-Week 1  — Finance closes the previous month using CUR-based allocation reports
-Week 2  — FinOps reviews allocation coverage KPI and investigates anomalies
-Week 3  — Engineering teams review optimization recommendations
-Week 4  — Finance and FinOps update forecasts and commitment models
+Week 1: Finance closes the previous month using CUR-based allocation reports
+Week 2: FinOps reviews allocation coverage KPI and investigates anomalies
+Week 3: Engineering teams review optimization recommendations
+Week 4: Finance and FinOps update forecasts and commitment models
 ```
 
 **Allocation Coverage KPI:**
@@ -518,6 +531,7 @@ Week 4  — Finance and FinOps update forecasts and commitment models
 
 **Governance**
 - Deploy EventBridge rule and Lambda to all active regions via IaC (Terraform or CloudFormation StackSets)
+- Add PutBucketTagging monitoring to the EventBridge rule pattern for S3 compliance accuracy
 - Centralize CUR across all accounts via AWS Organizations
 - Establish weekly tag compliance baseline tracked as a KPI
 - Introduce SCP guardrails for greenfield accounts once compliance exceeds 95%
@@ -596,7 +610,7 @@ CUR analysis via Athena confirmed $53 in unallocated spend across two services. 
 
 **3. Root Cause Analysis**
 
-CloudTrail forensics traced the EC2 gap to a `RunInstances` API call made directly via the AWS Management Console, confirmed by a Chrome browser UserAgent string in the CloudTrail event record. The console provides no tag enforcement at resource creation time. No SCP or tag policy existed to reject untagged resource requests. Tags were never applied, not removed, confirming a provisioning-time enforcement gap rather than post-deployment drift or tampering.
+CloudTrail forensics traced the EC2 gap to a `RunInstances` API call made directly via the AWS Management Console, confirmed by a Chrome browser UserAgent string in the CloudTrail event record. The console provides no tag enforcement at resource creation time. No SCP or tag policy existed to reject untagged resource requests. Tags were never applied and not removed, confirming a provisioning-time enforcement gap rather than post-deployment drift or tampering.
 
 **4. Financial Impact**
 
@@ -611,7 +625,7 @@ CloudTrail forensics traced the EC2 gap to a `RunInstances` API call made direct
 
 *Requires EventBridge rule deployment in each region where resources are provisioned.
 
-In enterprise environments where monthly spend exceeds $2M–$10M across 50–200 accounts, the same allocation failure can hide hundreds of thousands of dollars in unattributed cost.
+In enterprise environments where monthly spend exceeds $2M to $10M across 50 to 200 accounts, the same allocation failure can hide hundreds of thousands of dollars in unattributed cost.
 
 **5. Governance Failure**
 
@@ -621,7 +635,7 @@ Three compounding control gaps allowed the issue to persist: no SCP or tag polic
 
 *Immediate:* Missing tags applied manually. Finance closed January with 100% allocation accuracy. No restatements required.
 
-*Permanent:* Event-driven pipeline (CloudTrail → EventBridge → Lambda → Slack) deployed. Engineers receive real-time alerts without deployment friction. SCP guardrails scoped to greenfield accounts once compliance exceeds 95%. EventBridge rule to be deployed per active region via IaC.
+*Permanent:* Event-driven pipeline (CloudTrail to EventBridge to Lambda to Slack) deployed. Engineers receive real-time alerts without deployment friction. SCP guardrails scoped to greenfield accounts once compliance exceeds 95%. EventBridge rule to be deployed per active region via IaC.
 
 *Next steps:* Weekly CUR-based tag compliance baseline, allocation coverage as a first-class FinOps KPI, anomaly detection for week-over-week cost spikes.
 
