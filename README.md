@@ -49,7 +49,7 @@ Investigated a 17% AWS cost allocation gap using CUR and Athena SQL. CloudTrail 
 
 ## Architecture
 
-![FinOps Tag Governance Pipeline: CloudTrail to EventBridge to Lambda to Slack](screenshots/finops-architecture-v2.svg)
+![FinOps Tag Governance Pipeline: CloudTrail to EventBridge to Lambda to Slack](screenshots/finops-architecture-v2.png)
 
 **Pipeline flow:** EC2/S3 resource creation triggers CloudTrail to capture the API call. EventBridge matches RunInstances and CreateBucket events. Lambda validates Environment, Project, and Owner tags. Slack alerts fire to the Finance channel and the resource owner simultaneously.
 
@@ -460,17 +460,22 @@ The function was tested with a simulated untagged `RunInstances` event. All thre
 **CloudWatch log output (actual test execution):**
 
 ```
-START RequestId: a3f2c1d8-...
-FINOPS TAG COMPLIANCE VIOLATION
-Event: RunInstances
-Missing tags: ['Environment', 'Project', 'Owner']
-Principal: arn:aws:iam::123456789012:user/developer-01
-Account: 123456789012
-Region: us-east-1
-REPORT RequestId: a3f2c1d8-...
-Duration: 2.54 ms   Billed Duration: 3 ms
-Memory Size: 128 MB   Max Memory Used: 37 MB
+START RequestId: abb3cf8a-8c39-442d-ba6b-378ccd87444e Version: $LATEST
+ALERT: {
+"alert": "FINOPS TAG COMPLIANCE VIOLATION",
+"event": "RunInstances",
+"missing_tags": ["Environment", "Project", "Owner"],
+"iam_principal": "arn:aws:iam::123456789012:user/developer-01",
+"account_id": "123456789012",
+"region": "us-east-1"
+}
+END RequestId: abb3cf8a-8c39-442d-ba6b-378ccd87444e
+REPORT RequestId: abb3cf8a-8c39-442d-ba6b-378ccd87444e
+Duration: 2.54 ms   Billed Duration: 259 ms
+Memory Size: 128 MB   Max Memory Used: 70 MB   Init Duration: 255.90 ms
 ```
+
+> **Note on Billed Duration vs execution time:** The function executed in 2.54ms but AWS billed 259ms on this invocation. The difference is the 255.90ms cold start (Init Duration) — the one-time cost of loading the Python runtime and function code into memory on first invocation. Subsequent warm invocations bill only the 2.54ms execution time. Cold start is a normal Lambda behaviour and has no impact on alert latency in this use case since EventBridge invocations are not time-critical at the millisecond level.
 
 **Result:** `statusCode: 200`, `missing_tags: ['Environment', 'Project', 'Owner']`
 
