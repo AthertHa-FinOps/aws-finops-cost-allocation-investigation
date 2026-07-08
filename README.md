@@ -1,5 +1,12 @@
 # FinOps Investigation: AWS Cost Allocation Failure and Tag Governance Remediation
 
+> **Project context:** This is a self-directed learning project completed in a personal AWS 
+> sandbox account, not a professional engagement or paid consulting work. Cost figures are 
+> intentionally lab-scaled ($315 in total spend) so the methodology could be tested end to end 
+> without financial risk. The investigation techniques, SQL patterns, and governance reasoning 
+> are written to map directly onto enterprise environments regardless of spend volume — that 
+> mapping is explained throughout the document.
+
 ---
 
 ## Portfolio Overview
@@ -88,6 +95,13 @@ allocation coverage corrects all three.
 ---
 
 ## What This Demonstrates
+
+> **Project context:** This is a self-directed learning project completed in a personal AWS 
+> sandbox account, not a professional engagement or paid consulting work. Cost figures are 
+> intentionally lab-scaled ($315 in total spend) so the methodology could be tested end to end 
+> without financial risk. The investigation techniques, SQL patterns, and governance reasoning 
+> are written to map directly onto enterprise environments regardless of spend volume — that 
+> mapping is explained throughout the document.
 
 | Skill | Evidence |
 |---|---|
