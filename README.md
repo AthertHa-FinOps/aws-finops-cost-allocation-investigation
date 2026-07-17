@@ -330,62 +330,38 @@ accounts in a consolidated Organizations CUR dataset.
 
 ### Phase 3: CloudTrail Forensic Investigation
 
-**Objective:** Determine how and why the resource was created without tags.
+**Objective:** determine how and why the resource was created without tags, was it never tagged,
+or tagged and later stripped?
 
-With the untagged resource identified in Phase 2 (instance ID `i-0c9cfb67280fe44ee`), I moved to CloudTrail to determine the IAM principal,
-launch method, and whether tags were absent at creation or removed afterward.
+CloudTrail was the right tool because it captures request *intent*, including the
+`tagSpecificationSet` submitted with the API call, something a post-state resource evaluation
+(like AWS Config) can't reconstruct. Config records what a resource looks like after creation;
+CloudTrail records what was actually asked for at the moment of creation. For a tagging
+investigation, that's the difference between knowing tags are missing and knowing they were never
+submitted.
 
-CloudTrail was the correct tool for this phase because it captures request intent, including the `tagSpecificationSet` submitted with the 
-API call, which cannot be reconstructed from post-state resource evaluation. AWS Config records what a resource looks like after creation; 
-CloudTrail records what was asked for at the moment of creation. For a tagging investigation, that distinction is the difference between
-knowing tags are missing and knowing they were never submitted.
+I filtered CloudTrail Event history to `RunInstances` and opened the full JSON event for
+`i-0c9cfb67280fe44ee`.
 
-#### Step 1: CloudTrail Event Record (Full JSON)
+![CloudTrail RunInstances event record showing Root IAM principal, timestamp, and Chrome browser UserAgent](screenshots/03a%20-%20cloudtrail-event-history-runinstances.png)
 
-I filtered CloudTrail Event history to `RunInstances` and opened the full JSON event record for `i-0c9cfb67280fe44ee`. This is the primary
-forensic document. It confirms the IAM principal, the identity governance context, the launch timestamp, the user agent (console vs. CLI vs.
-SDK), and the complete tag specification submitted with the API call.
+![CloudTrail RunInstances tagSpecificationSet showing only the Name tag](screenshots/03b%20-%20cloudtrail-runinstances-json-cli-useragent.png)
 
-![CloudTrail RunInstances event record showing Root IAM principal, timestamp 2026-01-22T19:00:13Z, awsRegion us-east-2, instanceType 
-t3.micro, and Chrome browser UserAgent confirming console launch](screenshots/03a%20-%20cloudtrail-event-history-runinstances.png)
+The `tagSpecificationSet` contained only the `Name` tag (`PROD-WEB-SERVER-01`). `Environment`,
+`Project`, and `Owner` were never submitted with the API call. Confirming the tags were absent at
+creation, not applied and later removed.
 
-#### Step 2: Tag Specification Evidence
+**Data integrity check (Step 3):** the CloudTrail-recorded instance type (`t3.micro`) doesn't match
+the Cost and Usage Report (CUR) billed type (`t3.large`) for this same resource. In a live investigation 
+this triggers a
+short secondary check: query CloudTrail for `ModifyInstanceAttribute` events on the same resource
+to rule out a post-launch change, and confirm the Cost and Usage Report (CUR) processing interval aligns 
+with the
+CloudTrail timestamp. CloudTrail remains the source of truth for creation-time intent regardless.
+In this lab, the values across screenshots were captured at different simulation stages and
+aren't meant to align perfectly, the reconciliation technique is what's transferable.
 
-![CloudTrail RunInstances tagSpecificationSet showing the Name tag only for PROD-WEB-SERVER-01 with no Environment, Project, or Owner tags 
-present](screenshots/03b%20-%20cloudtrail-runinstances-json-cli-useragent.png)
-
-> **Pipeline evolution note:** The EventBridge screenshot reflects the EC2 and initial S3 detection phase (`RunInstances` and
-`CreateBucket`). S3 validation was subsequently refined to trigger on `PutBucketTagging` rather than `CreateBucket` after identifying the
-temporal compliance window created by S3's asynchronous tagging model. The production event pattern includes all three event names:
-`RunInstances`, `CreateBucket`, and `PutBucketTagging`.
-
-The `tagSpecificationSet` in the CloudTrail JSON event record contained only the `Name` tag (`PROD-WEB-SERVER-01`). `Environment`,
-`Project`, and `Owner` were not submitted with the API call. This confirms the tags were absent at creation — they were never included and
-were not applied then later removed.
-
-#### Step 3: Data Integrity Verification (Creation-Time State vs. Billing State)
-
-In a production investigation, the instance type recorded in the CloudTrail `requestParameters` must reconcile with the
-`line_item_usage_type` field in CUR. The CloudTrail event for this resource records `t3.micro` as the requested instance type, while CUR 
-attributes a `t3.large` cost profile to the same resource ID.
-
-This discrepancy triggers a secondary validation protocol:
-
-1. **Check for post-launch modification:** Query CloudTrail for `ModifyInstanceAttribute` events on the same resource ID to determine if the
-instance type was changed after launch.
-2. **Check for data pipeline lag:** Verify that the CUR processing interval and the CloudTrail event timestamp align within the same billing
-hour.
-3. **Treat CloudTrail as creation-time source of truth:** The `tagSpecificationSet` and `instanceType` in the `RunInstances` event represent
-the intent at provisioning time. CUR represents the billed reality. For a tagging investigation, creation-time intent is the relevant signal
-because it proves whether tags were submitted at provisioning.
-
-In this lab environment, the values across screenshots were captured at different stages of the simulation and are not intended to align 
-perfectly. The forensic technique — reconciling creation-time API intent against billing state — is the transferable production skill.
-
-#### Step 4: Session Attribution: The Identity Governance Finding
-
-The forensic chain does not stop at the IAM principal type. The CloudTrail event reveals three additional facts about the identity context
-that matter in an enterprise investigation:
+**Session attribution, The identity finding (Step 4):**
 
 ```json
 "userIdentity": {
@@ -399,76 +375,35 @@ that matter in an enterprise investigation:
 }
 ```
 
-The CloudTrail session record contains no `sessionIssuer`, no role assumption chain, and no federation context. Each of those gaps is 
-independent and together they confirm there was no attributable identity at any layer.
+The session record has no `sessionIssuer`, no role-assumption chain, and no federation context. I
+also queried CloudTrail for `AssumeRole` events scoped to this principal in the 30 minutes before
+the `RunInstances` call, none returned. So this wasn't a role assumed and then used; there was no
+attributable identity chain at any layer.
 
-To confirm no role assumption preceded the provisioning action, CloudTrail event history was queried for `AssumeRole` events scoped to the
-Root principal ARN, bounded to the 30-minute window prior to the `RunInstances` timestamp (`2026-01-22T18:30:00Z` to 
-`2026-01-22T19:00:13Z`), and filtered to the `us-east-2` region where the instance was created. No matching `AssumeRole` events were 
-returned.
+That matters independently of the tagging gap: even with correct tags, there's no way to route
+accountability to a specific team or approval workflow, because no `sessionIssuer` means no team
+ownership is resolvable after the fact. In a security review this would be logged as a separate
+identity governance finding alongside the tagging failure. Both existed within the same
+ungoverned provisioning surface.
 
-This is not a routine compliance gap. Root usage removes enforceable organisational attribution and ownership mapping, even though basic
-forensic signals like source IP, MFA status, and session timing remain visible in CloudTrail. What is absent is the role assumption chain
-that maps a provisioning action to a team, a cost centre, and an approval workflow. Without that chain, post-incident ownership cannot be
-assigned and targeted enforcement cannot be designed around known principals. No `sessionIssuer` means no team ownership is resolvable in
-post-incident analysis. No `AssumeRole` means no control boundary was crossed, because no control boundary existed. In a security or audit
-review, this finding would be logged separately from the tagging failure as a distinct identity governance incident. Both existed within the
-same ungoverned provisioning surface.
+> **Note on the IAM principal used in this lab:** Root with MFA was used deliberately to simulate
+> a worst-case scenario with no identity boundary at the provisioning layer. In a real enterprise
+> environment root is typically locked via SCP; the production equivalents are a broad-permission
+> developer role launching via console, a federated SSO user working outside an IaC pipeline, or a
+> break-glass role used outside a change window. The forensic technique, UserAgent analysis plus
+> `tagSpecificationSet` inspection, applies identically to all of those.
 
-> **Note on the IAM principal used in this lab:** A Root session with MFA was used to simulate a worst-case scenario where no enforced
-identity boundary exists at the provisioning layer. In a real enterprise environment, root is locked via SCP. The production equivalents are
-a developer IAM role with broad permissions launching via console, a federated SSO user outside an IaC pipeline, or a break-glass role used
-outside a change window. The forensic technique of UserAgent string analysis and `tagSpecificationSet` inspection applies to all of those
-cases in exactly the same way.
-
-#### Forensic Evidence Chain Summary
+**Forensic evidence chain summary:**
 
 | Evidence | Finding |
 |---|---|
-| CUR Phase 2 | Athena query confirming untagged resource, instance ID, and $40 monthly cost |
-| CloudTrail JSON (top half) | IAM principal type Root, no sessionIssuer or federation context, browser-based invocation confirmed via
-Chrome UserAgent string, awsRegion us-east-2, creation timestamp 2026-01-22T19:00:13Z |
-| CloudTrail JSON (tag section) | `tagSpecificationSet` contained `Name` tag only; Environment, Project, and Owner were absent at creation |
-| Session attribution | `AssumeRole` query scoped to principal ARN, bounded to 30-minute pre-incident window, filtered to us-east-2: zero 
-results. No role assumption chain, no federation context. No enforced identity boundary existed at the provisioning layer. |
-
-**Key evidence from the CloudTrail event:**
-
-```json
-{
-  "eventName": "RunInstances",
-  "eventTime": "2026-01-22T19:00:13Z",
-  "awsRegion": "us-east-2",
-  "userIdentity": {
-    "type": "Root",
-    "sessionContext": {
-      "attributes": {
-        "creationDate": "2026-01-22T13:17:47Z",
-        "mfaAuthenticated": "true"
-      }
-    }
-  },
-  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-  "requestParameters": {
-    "instanceType": "t3.micro",
-    "tagSpecificationSet": {
-      "items": [
-        {
-          "resourceType": "instance",
-          "tags": [
-            { "key": "Name", "value": "PROD-WEB-SERVER-01" }
-          ]
-        }
-      ]
-    }
-  }
-}
-```
-
-> **Note:** The `instanceType` recorded here (`t3.micro`) reflects the API request payload at creation time. In a live environment, this
-would be reconciled against CUR `line_item_usage_type` via the Data Integrity Verification protocol described above. The
-`tagSpecificationSet` evidence — showing only the `Name` tag — is the primary forensic finding and is unaffected by instance type
-reconciliation.
+| Cost and Usage Report (CUR) (Phase 2) | Untagged resource, instance ID, $40/month cost |
+| CloudTrail JSON | Root principal, no sessionIssuer or federation context, console launch confirmed via 
+Chrome UserAgent |
+| CloudTrail JSON (tag section) | `tagSpecificationSet` had only `Name`; the three required tags were absent 
+at creation |
+| Session attribution | Zero `AssumeRole` events in the 30-minute pre-incident window. No role chain, no 
+federation context |
 
 ---
 
