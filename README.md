@@ -451,7 +451,8 @@ produces the same Finance-invisible result as no tagging at all.
 ![S3 tag compliance audit via CUR showing NULL Environment tags](screenshots/04%20-%20cur-s3-tag-compliance-audit.png)
 
 **S3's asynchronous tagging behavior matters here.** S3's `CreateBucket` API doesn't accept tags
-inline the way EC2 does. Tags are applied afterward via `PutBucketTagging`. That creates a short
+inline the way EC2 does. This creates an important distinction between resource creation compliance and eventual compliance state, which must be 
+accounted for when designing automated controls. Tags are applied afterward via `PutBucketTagging`. That creates a short
 window where a bucket exists in a technically non-compliant state even if it will be tagged
 correctly within seconds. The production control accounts for this with dual-event monitoring
 (`CreateBucket` and `PutBucketTagging`) plus a delayed validation Lambda as a safety net for
