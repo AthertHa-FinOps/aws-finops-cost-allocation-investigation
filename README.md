@@ -67,19 +67,27 @@ recommend a governance improvement proportional to the risk.
 
 ---
 
-# Case Study 1: AWS Cost Allocation Failure and Tag Governance Remediation
+# Case Study 1: Investigating an AWS Cost Allocation Control Failure
 
-A 17% cost allocation gap ($53 unallocated from $315 in monthly spend) was invisible to Finance chargeback reporting. This investigation
-traces the gap to its source, remediates it, and implements a detection pipeline to prevent recurrence.
+A simulated monthly AWS reconciliation identified a 17% cost allocation gap. Although the invoice was 
+accurate, $53 of the month's $315 spend could not be attributed to the required cost allocation tags, making 
+it invisible to Finance chargeback reporting.
 
-This case walks through how a cloud cost allocation failure was investigated end to end, from CUR analysis through CloudTrail forensics to 
-event-driven governance remediation. The forensic chain (CUR → CloudTrail → IAM principal → `tagSpecificationSet`) is production-grade. The 
-governance pipeline (CloudTrail → EventBridge → Lambda) is the correct control for out-of-band provisioning after IaC prevention controls 
-are in place.
+This investigation traces the evidence from the initial reconciliation through Athena analysis, CloudTrail 
+forensics, root cause identification, and the design of an event driven detective control.
 
-> **Key forensic finding:** This investigation proves that required tags were never submitted at creation time using CloudTrail
-`tagSpecificationSet` evidence, not removed post-deployment. That distinction determines whether the failure is a provisioning control gap
-or a configuration drift problem — the difference between a system design failure and a human error. The evidence confirms the former.
+
+> **Key forensic finding:** CloudTrail evidence, specifically the `tagSpecificationSet` submitted with the 
+> RunInstances API call, showed that the required tags were never included during provisioning. This 
+> confirmed the issue originated during provisioning rather than being caused by post creation tag removal.
+
+### A note on the screenshots
+
+The screenshots capture different stages of the investigation and control development. Where screenshots 
+reflect an earlier implementation, the accompanying text describes the final design and explains the changes 
+made during refinement.
+
+Athena screenshots use representative values rather than live account identifiers or production billing data.
 
 ---
 
