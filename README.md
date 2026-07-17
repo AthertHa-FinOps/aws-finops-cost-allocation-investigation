@@ -83,8 +83,8 @@ forensics, root cause identification, and the design of an event driven detectiv
 
 ### A note on the screenshots
 
-The screenshots capture different stages of the investigation and control development. Where screenshots 
-reflect an earlier implementation, the accompanying text describes the final design and explains the changes 
+The screenshots capture different stages of the investigation and control development. Where screenshots capture earlier iterations, the accompanying 
+text describes the final design and explains the changes 
 made during refinement.
 
 Athena screenshots use sanitized lab data and representative values. Queries, investigation steps, and evidence collection methods reflect the actual 
@@ -276,7 +276,7 @@ level.
 I selected the Cost and Usage Report (CUR) queried through Athena rather than Cost Explorer because CUR provides row-level billing records with 
 individual resource tag columns. Cost Explorer is optimized for aggregated financial reporting, whereas CUR supports forensic investigation by 
 exposing detailed resource attribution data required for reconciliation. Unblended cost was used throughout because it aligns with Finance's 
-authoritative billing source of truth.
+authoritative billing source.
 
 Before running this analysis, the `Environment`, `Project`, and `Owner` tags first had to be activated as AWS Cost Allocation Tags in the Billing 
 console. Without this prerequisite, those columns would not exist in the Cost and Usage Report (CUR) schema, causing NULL-tag analysis to return 
@@ -743,8 +743,8 @@ ORDER BY unallocated_spend DESC;
 
 Rollout sequencing in a real multi-account environment usually means enforcing first on the
 accounts with the highest unallocated spend, and holding off on low-spend dev environments until
-a later wave. Shared infrastructure VPCs, transit gateways, NAT gateways. Has no single owner,
-so any chargeback split for those needs to be agreed on before tagging is meaningful at all.
+a later wave. Shared infrastructure such as VPCs, Transit Gateways, and NAT Gateways often has no single owner. So any chargeback split for those needs 
+to be agreed on before tagging is meaningful at all.
 
 ---
 
