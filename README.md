@@ -1,11 +1,43 @@
-# FinOps Investigation: AWS Cost Allocation Failure and Tag Governance Remediation
+# AWS Cloud Governance and Cost Allocation Audit: Investigating a Tag Compliance Control Failure
 
-> **Project context:** This is a self-directed learning project completed in a personal AWS 
-> sandbox account, not a professional engagement or paid consulting work. Cost figures are 
-> intentionally lab-scaled ($315 in total spend) so the methodology could be tested end to end 
-> without financial risk. The investigation techniques, SQL patterns, and governance reasoning 
-> are written to map directly onto enterprise environments regardless of spend volume — that 
-> mapping is explained throughout the document.
+*This is the full technical write-up. For the 5-minute version, see the summary README in my
+other repo.*
+
+> **Project context:** This is a self directed learning project completed in a personal AWS sandbox account, 
+> not a professional engagement or paid consulting work. Cost figures are intentionally lab scaled ($315 
+> total spend) so the investigation could be completed end to end without financial risk. Although 
+> the environment is intentionally small, the investigation methodology, evidence collection approach, SQL 
+> analysis, and governance decisions reflect the same control assessment practices used in larger enterprise 
+> environments.
+
+## Governance Focus
+
+This portfolio demonstrates governance capabilities across cloud financial controls, asset attribution, 
+audit evidence collection, control assessment, and 
+operational risk reduction.
+
+AWS provides the technical environment for the investigation. The transferable skills demonstrated 
+throughout this work are evidence validation, control 
+analysis, root cause investigation, governance decision making, and designing practical governance controls 
+that strengthen operational accountability.
+
+---
+
+## Previous Compliance Experience
+
+Before transitioning into cloud governance, I spent more than thirteen years working in regulated real 
+estate transactions where every file had to reconcile against 
+contracts, disclosures, and supporting documentation before it could close.
+
+That experience shaped how I approached this investigation. Rather than treating missing resource tags as 
+simply a technical issue, I approached them as an audit 
+problem: reconcile financial records against operational evidence, identify where the control failed, 
+determine why it failed, and recommend controls that reduce 
+the likelihood of recurrence.
+
+Although the technology is different, the underlying discipline is the same. Both environments require 
+evidence based decision making, documentation accuracy, 
+reconciliation, compliance, and repeatable controls that improve accountability rather than one time fixes.
 
 ---
 
