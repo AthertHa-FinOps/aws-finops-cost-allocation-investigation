@@ -440,45 +440,40 @@ which removes the window entirely.
 
 ---
 
-## Root Cause and Remediation
+## Governance Decision
 
-### Root Cause Analysis
+The technical recommendation was not simply to purchase additional Savings Plans. The governance decision 
+depended on distinguishing sustained demand from a 
+temporary workload. Committing against a one time spike would improve short term utilization metrics but 
+increase long term financial risk if demand returned to 
+baseline.
+
+The recommended approach was therefore to increase coverage conservatively while validating workload 
+recurrence with the data engineering team before expanding 
+commitments further. This balances cost optimization against commitment risk and aligns Finance, 
+Engineering, and Cloud Operations around a common decision 
+framework.
+
+## Root Cause and Remediation
 
 | | |
 |---|---|
-| **Primary failure** | Absence of preventive tagging enforcement at resource creation |
-| **Contributing factor 1** | Lack of attributable identity chain |
-| **Contributing factor 2** | Tag activation dependency with no verification process |
+| **Primary failure** | No preventive tagging control at resource creation |
+| **Contributing factor 1** | No attributable identity chain |
+| **Contributing factor 2** | Tag activation dependency with no verification step |
 | **Result** | Unattributed spend and no enforceable ownership model |
 
-**Primary failure: no preventive tagging control at resource creation time.**
+The sandbox environment had no SCP, IAM condition key, IaC guardrail, or curated provisioning interface 
+requiring tags at creation. That was the direct cause. The 
+missing identity chain didn't cause the tagging failure, but it removed the ability to assign ownership or 
+design targeted enforcement around a known principal. 
+Tagging makes spend allocatable. Identity makes it attributable. This environment had weaknesses in both.
 
-No SCP, IAM condition key, IaC guardrail, or curated provisioning interface enforced required tags at the point of resource creation. This 
-is the direct cause of the allocation gap: resources reached the billing layer without the tags Finance depends on for attribution. The 
-failure was in system design, not user behaviour.
-
-**Contributing factor 1 — Identity architecture gap.**
-
-The CloudTrail session record contains no `sessionIssuer`, no role assumption chain, and no federation context. This did not cause the 
-tagging failure. It removed attribution, which prevented ownership assignment and made targeted enforcement design non-viable. Without an
-attributable identity chain, post-incident ownership cannot be established, repeat violations cannot be tied to a responsible principal, and 
-scoped enforcement cannot be designed.
-
-Tagging and identity are different controls that serve different purposes and neither one works without the other in a real FinOps model. 
-Tagging makes spend allocatable. Identity makes it attributable. When both are missing you can see the cost but you cannot assign it to 
-anyone and you have no lever for enforcement.
-
-**Contributing factor 2 — Observability dependency risk.**
-
-The `Environment`, `Project`, and `Owner` tags were activated as Cost Allocation Tags before this investigation ran. Without that 
-activation, the CUR schema would not contain tag columns at all, and the NULL-filtering queries in Phase 2 would return no results. Tag 
-activation is not technically a control, but its absence silently disables an entire class of allocation investigation.
-
-**Design philosophy: visibility over false accuracy.** The remediation approach deliberately prioritized restoring correct financial 
-visibility over achieving superficial compliance. Automated tag-back remediation was evaluated and rejected. Default tags can produce 
-chargeback reports that assign cost incorrectly, distort showback data, and create misleading financial baselines. The safer approach in 
-this scenario was to surface the allocation gap accurately, alert the responsible principal, and allow correct tags to be applied by the 
-actual resource owner. The full reasoning is in Appendix C.
+**Design choice: visibility over false accuracy.** I evaluated and rejected an auto-remediation
+Lambda that would apply default tags on detection. Default tags produce chargeback reports that
+assign cost to the wrong team and distort the whole downstream FinOps model. The safer approach
+was to surface the gap accurately, alert the resource owner, and let the actual owner apply the
+correct tags. Full reasoning in Appendix B.
 
 ---
 
