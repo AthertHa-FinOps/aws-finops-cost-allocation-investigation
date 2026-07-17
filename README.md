@@ -87,7 +87,8 @@ The screenshots capture different stages of the investigation and control develo
 reflect an earlier implementation, the accompanying text describes the final design and explains the changes 
 made during refinement.
 
-Athena screenshots use representative values rather than live account identifiers or production billing data.
+Athena screenshots use sanitized lab data and representative values. Queries, investigation steps, and evidence collection methods reflect the actual 
+analysis workflow used during the investigation.
 
 ---
 
