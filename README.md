@@ -543,7 +543,7 @@ restatements required.
 
 **Permanent, in progressive stages:**
 1. Tag Policies standardize required tag keys across accounts without blocking anything.
-2. EventBridge + Lambda detect violations within minutes and alert Finance and the resource owner.
+2. EventBridge + Lambda detect violations within minutes and alert Finance and the resource owner. The control is intentionally detective rather than preventive because the initial objective was to establish visibility, measure compliance, and identify exceptions before introducing blocking controls.
 3. SCP guardrails enforce compliance for greenfield accounts once coverage stabilizes above 95%,
    grandfathering existing workflows.
 
