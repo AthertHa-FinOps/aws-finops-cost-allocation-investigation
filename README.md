@@ -477,68 +477,43 @@ correct tags. Full reasoning in Appendix B.
 
 ---
 
-### Control Hierarchy: Where Detection Fits
+## Control Hierarchy: Where Detection Fits
 
-This investigation addresses the detection stage of a broader governance maturity model (Detect → Baseline → Stabilize → Enforce) and 
-provides a foundation for progressing toward enforcement as compliance stabilizes. Detection precedes broad enforcement, but this is not a 
-universal rule. In many real environments, baseline SCPs already exist from day one — for example denying root usage or requiring tags for 
-specific services. Scoped enforcement can and should coexist with detection early, applied selectively where the environment is known and 
-controlled.
+This addresses the *detection* stage of a governance maturity model (Detect → Baseline →
+Stabilize → Enforce). Detection generally precedes broad enforcement, but not always. Many real
+environments already have baseline SCPs from day one (denying root usage, for example), and
+scoped enforcement can coexist with detection early where the environment is well understood.
 
-**1. IaC enforcement — enforces at design time.**
-Tags are required in the Terraform module itself. Resources without required tags fail the plan before anything reaches AWS. Strongest first 
-control; catches omissions at the point of review.
+| Layer | What it enforces | Notes |
+|---|---|---|
+| **IaC (Terraform, etc.)** | Design time | Strongest first control. A plan without required tags simply 
+fails before anything reaches AWS |
+| **Curated provisioning interfaces** (Backstage, ServiceNow, Service Catalog) | Provisioning entry point | 
+Enforces tagging by construction before any API call is 
+made |
+| **SCP / IAM condition keys** | Request time | Effective when scoped narrowly to known roles; blanket 
+org-wide enforcement without a baseline breaks AWS-managed 
+service roles (EMR, ECS, Auto Scaling) |
+| **Tag Policies** | Schema only | Standardizes tag *names* across accounts; doesn't block anything |
+| **EventBridge + Lambda** | Detection | Catches out-of-band activity even where IaC and curated 
+provisioning exist. Break-glass access, ad hoc scripts, 
+incident-response console use |
+| **Selective SCP rollout** | Enforcement, after baseline | Applied org-wide only once exceptions are mapped. Applied too early it erodes engineering trust in every governance initiative that follows |
 
-**2. Curated provisioning interfaces — enforce at the provisioning entry point.**
-Internal developer platforms (such as Backstage), ITSM-mediated provisioning layers (such as ServiceNow Cloud Provisioning), and Service 
-Catalog products constrain how resources are created before any API call is made. Engineers provision through pre-approved interfaces that
-enforce tagging by construction. This layer sits between IaC and runtime enforcement and is how many larger organisations handle the gap 
-between pipeline-governed and console-accessible provisioning.
+A production SCP implementation would enforce required request tags at provisioning time, but only after the 
+organization has established a tagging baseline, 
+mapped exceptions, and validated required workflows.
 
-**3. SCP and IAM — enforce at request time.**
-SCPs block at the Organizations level. IAM condition keys like `aws:RequestTag/Environment` and `aws:TagKeys` block at the role level and 
-are viable early when scoped narrowly to specific developer roles with predictable provisioning patterns. The constraint is not IAM itself —
-it is scope and exception mapping. Blanket org-wide IAM enforcement without a baseline breaks AWS-managed service roles (EMR, ECS, Auto 
-Scaling) that do not pass required tags consistently.
+Example enforcement sequence:
 
-A practical example of a scoped deny policy enforcing both tag presence and value constraints:
+1. Detect current compliance gaps using CUR, CloudTrail, and EventBridge.
+2. Establish required tag standards using Tag Policies.
+3. Identify approved exceptions such as AWS managed services, automation roles, and break glass workflows.
+4. Apply scoped SCP or IAM condition key enforcement to new workloads.
+5. Expand enforcement after compliance stabilizes above the agreed threshold.
 
-```json
-{
-  "Effect": "Deny",
-  "Action": "ec2:RunInstances",
-  "Resource": "*",
-  "Condition": {
-    "Null": {
-      "aws:RequestTag/Environment": "false",
-      "aws:RequestTag/Project": "false",
-      "aws:RequestTag/Owner": "false"
-    },
-    "StringEquals": {
-      "aws:RequestTag/Environment": ["prod", "dev", "staging"]
-    }
-  }
-}
-```
-
-The Null condition with "false" enforces tag presence (deny if the key is not null — i.e., the tag must exist). The StringEquals condition 
-enforces value constraints. Together they form an implicit AND: the request must include all three tags, and Environment must match the 
-allowed value set.
-
-**4. Tag Policies — standardize schema only.**
-AWS Organizations Tag Policies standardize tag key names across accounts. They do not block non-compliant resources. Value is schema 
-consistency (preventing `environment` and `Environment` from producing separate NULL patterns in CUR) and reporting visibility. Not an 
-enforcement control.
-
-**5. EventBridge + Lambda — detect out-of-band provisioning.**
-Even in environments with strong IaC and curated provisioning interfaces, some activity happens outside governed paths: break-glass access,
-SDK scripts, direct console use for incident response. This is the correct control for that class of activity.
-
-**6. Selective SCP and IAM enforcement — after exceptions are mapped.**
-SCP guardrails applied org-wide after the compliance baseline is understood and per-account exceptions are documented. Applied too early, 
-before legacy workloads and AWS-managed service roles are mapped out, they generate incidents that erode engineering trust and make every 
-subsequent governance initiative harder.
-
+The control decision is not whether enforcement is technically possible; it is determining when enforcement 
+reduces risk rather than creating operational disruption.
 ---
 
 ### Remediation and Controls
