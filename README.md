@@ -43,12 +43,27 @@ reconciliation, compliance, and repeatable controls that improve accountability 
 
 ## Portfolio Overview
 
-This portfolio presents two independent FinOps investigations: a cost allocation failure traced through forensic CUR and CloudTrail 
-analysis, and a cross-account anomaly investigation using consolidated billing data and Savings Plans coverage modeling. Together they 
-demonstrate repeatable methodology across different root cause classes, multi-account scale, and the optimization layer that follows correct 
-attribution.
+This portfolio contains two cloud governance investigations that follow the same underlying approach: 
+reconcile the system of record against operational evidence, 
+identify where evidence diverges, determine why the control failed and how it should be strengthened, and 
+design practical remediation.
 
-Both investigations use lab-scaled figures. The methodology in each maps directly to enterprise environments regardless of spend volume.
+The first investigation focuses on a cost allocation failure caused by missing resource tags. The second 
+examines cross account spending patterns, financial 
+controls, and commitment optimization using consolidated billing data.
+
+Both investigations use a personal AWS environment, but the investigative methodology is intended to mirror 
+governance and audit practices used in larger 
+organizations.
+
+The first case study demonstrates an investigation into a cloud cost allocation control failure. It follows 
+the complete governance lifecycle from financial 
+reconciliation through forensic investigation, root cause analysis, control design, and operational 
+recommendations.
+
+Across both investigations I follow the same audit methodology: validate the financial record, isolate the 
+discrepancy, collect operational evidence, identify the control failure, quantify the business impact, and 
+recommend a governance improvement proportional to the risk.
 
 ---
 
