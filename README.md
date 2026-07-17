@@ -242,66 +242,31 @@ failure was in attribution, not billing.
 
 ### Phase 1: Invoice Validation
 
-**Objective:** Confirm AWS billed correctly before investigating allocation.
-
-The first assumption I tested was a billing error. If the invoice was wrong, the allocation gap was a Finance reporting artifact and not an
-infrastructure problem. I validated service totals in Cost Explorer, reconciled them against CUR via Athena, and confirmed the invoice
-totals matched exactly.
-
-**Conclusion:** Billing was correct. That ruled out the simplest explanation. The issue existed downstream in the attribution layer, which
-meant the investigation had to move to the resource level.
+I first tested whether this was simply a billing error, which would make it a Finance reporting
+artifact rather than an infrastructure problem. I validated service totals in Cost Explorer,
+reconciled them against Cost and Usage Report (CUR) via Athena, and confirmed the totals matched exactly. 
+Billing was
+correct, which ruled out the simplest explanation and pushed the investigation to the resource
+level.
 
 ![Invoice validation confirming $315 total spend](screenshots/01%20-%20invoice-total-315.png)
 
-> **Query reproduction note:** The screenshot above uses a `VALUES` clause to simulate Athena output for portfolio presentation. The
-production-equivalent query aggregates `SUM(line_item_unblended_cost)` by `line_item_product_code` from live CUR Parquet files in S3 and
-reconciles against the AWS invoice PDF total.
+> **Query reproduction note:** The screenshot uses a `VALUES` clause to simulate Athena output for
+> the portfolio. The production-equivalent query aggregates `SUM(line_item_unblended_cost)` by
+> `line_item_product_code` from live Cost and Usage Report (CUR) Parquet files and reconciles against the 
+> invoice PDF.
 
----
+### Phase 2: Resource Isolation (Cost and Usage Report(CUR) Analysis)
 
-### Phase 2: Resource Isolation (CUR Analysis)
+I used CUR via Athena rather than Cost Explorer because it allows row-level tag inspection. Cost Explorer is 
+optimized for aggregated cost analysis, while CUR 
+provides the detailed row level tag and resource attribution data required for this investigation. Unblended 
+cost was used throughout to match Finance's 
+authoritative source of truth.
 
-**Objective:** Identify resources missing required allocation tags.
-
-**Data flow:**
-
-```
-AWS Account (Sandbox)
-        │
-        ▼
-Cost and Usage Report (CUR)
-Delivered daily to S3 billing bucket
-        │
-        ▼
-AWS S3 Billing Data Bucket
-Raw CUR parquet files
-        │
-        ▼
-AWS Athena
-SQL queries against CUR schema
-        │
-        ▼
-Unallocated Spend Detection
-NULL tag filtering and resource isolation
-        │
-        ▼
-Allocation Gap Confirmed
-$53 (~17%) invisible to Finance reporting
-```
-
-I used CUR via Athena rather than Cost Explorer because it enables row-level tag inspection. Cost Explorer aggregates data and cannot
-surface which specific resources have NULL allocation tags or how much each one costs. Unblended cost was used throughout to align with
-invoice totals, since Finance treats unblended cost as the authoritative source of truth.
-
-The `Environment`, `Project`, and `Owner` tags were activated as Cost Allocation Tags in the AWS Billing and Cost Management console before
-this investigation started. This activation step is a prerequisite that is easy to miss: without it, tag columns are absent from the CUR
-schema entirely and the NULL-filtering queries in Phase 2 cannot run. Tag activation is not a technical control, but its absence would have
-made this investigation impossible before it started.
-
-#### The Turning Point
-
-The initial goal was to identify *where* allocation was failing, not *why*. I grouped CUR line items by resource ID and inspected all three
-required tag columns simultaneously:
+Before running this analysis, `Environment`, `Project`, and `Owner` had to be activated as Cost Allocation 
+Tags in the Billing console. Otherwise those columns 
+wouldn't exist in the CUR schema, and the NULL tag queries would return no results.
 
 ```sql
 SELECT
@@ -316,27 +281,11 @@ GROUP BY 1, 2, 3, 4
 ORDER BY total_cost DESC;
 ```
 
-What stood out was not the cost itself. It was the pattern of absence. For resource `i-0c9cfb67280fe44ee`, every line item returned NULL
-across all three tag columns simultaneously. Not one missing tag. Not two. All three. That pattern ruled out accidental omission. A
-developer who forgot one tag would not systematically omit all three across every billing line item for the same resource.
-
-At that point the problem shifted. This was no longer *"why is Finance missing cost?"* It became *"who created a resource that was never
-tagged at all?"* That pivot moved the investigation from Athena to CloudTrail.
-
-**SQL: Resource Verification Query**
-
-```sql
-SELECT
-    line_item_resource_id,
-    SUM(line_item_unblended_cost)       AS total_cost,
-    resource_tags_user_environment,
-    resource_tags_user_project,
-    resource_tags_user_owner
-FROM cur_database.aws_cur
-WHERE line_item_resource_id = 'i-0c9cfb67280fe44ee'
-  AND line_item_line_item_type = 'Usage'
-GROUP BY 1, 3, 4, 5;
-```
+**The turning point:** for resource `i-0c9cfb67280fe44ee`, every line item returned NULL across
+all three tag columns simultaneously. Not one missing tag, all three, consistently. A developer
+who forgot one tag wouldn't systematically omit all three across every billing line. That ruled
+out accidental omission, and shifted the question from "why is Finance missing cost" to "who
+created a resource that was never tagged at all", which is what sent me to CloudTrail.
 
 **Sample query output:**
 
@@ -344,25 +293,19 @@ GROUP BY 1, 3, 4, 5;
 |---|---|---|---|---|---|---|
 | PROD-WEB-SERVER-01 | i-0c9cfb67280fe44ee | t3.large | 40.00 | NULL | NULL | NULL |
 
-![Athena query results showing PROD-WEB-SERVER-01 with instance ID i-0c9cfb67280fe44ee, monthly cost $40.00, and NULL values across all 
-three required tags — Environment, Project, and Owner](screenshots/02%20-%20cur-resource-isolation-missing-allocation-tags.png)
+![Athena query results showing NULL values across all three required tags](screenshots/02%20-%20cur-resource-isolation-missing-allocation-tags.png)
 
-> **Result panel note:** This screenshot shows the isolated result output from the resource verification query. All three required
-allocation tags return NULL simultaneously — confirming the resource was never tagged, not partially tagged. The simultaneous absence across
-all three columns is the signal that rules out accidental omission and redirects the investigation to CloudTrail.
+![Resource verification query with simulated VALUES clause](screenshots/03%20-%20cloudtrail-forensics-runinstances-missing-tags-cli-launch.png)
 
-![Athena CUR resource verification query showing PROD-WEB-SERVER-01 with NULL allocation tags including the VALUES query code]
-(screenshots/03%20-%20cloudtrail-forensics-runinstances-missing-tags-cli-launch.png)
+> **Instance type note:** CloudTrail records `t3.micro` at creation time; Cost and Usage Report (CUR) 
+> reflects `t3.large`
+> as the billed type. CloudTrail is the source of truth for what was submitted at provisioning.
+> Cost and Usage Report (CUR) reflects current billing state. Any discrepancy between the two triggers a 
+> secondary check
+> (see Phase 3, Step 3).
 
-> **Query reproduction note:** This screenshot shows the `VALUES` clause used to simulate the Athena result set for portfolio presentation,
-alongside the result output. In a production investigation, this query executes against partitioned Parquet CUR files in S3. The production-
-equivalent query, which aggregates live `line_item_unblended_cost` by resource ID and tag columns, is provided below.
-
-> **Instance type note:** CloudTrail records `t3.micro` as the creation-time instance type while the CUR billing record reflects `t3.large`.
-CloudTrail is the source of truth for what was submitted at provisioning. CUR reflects the current billing state. Any discrepancy between
-the two triggers a secondary validation step.
-
-#### Production-Equivalent Unallocated Spend Query
+**Production-equivalent query** (partitioned by month and account, filtered on any of the three
+required tags being NULL):
 
 ```sql
 SELECT
@@ -377,8 +320,7 @@ SELECT
 FROM cur_table
 WHERE
     line_item_line_item_type = 'Usage'
-    AND line_item_usage_start_date
-        BETWEEN DATE '2026-01-01' AND DATE '2026-01-31'
+    AND line_item_usage_start_date BETWEEN DATE '2026-01-01' AND DATE '2026-01-31'
     AND (
         resource_tags_user_environment IS NULL
         OR resource_tags_user_project  IS NULL
@@ -388,9 +330,8 @@ GROUP BY 1, 2, 3, 4, 6, 7, 8
 ORDER BY total_cost DESC;
 ```
 
-> `DATE_TRUNC` and the `BETWEEN DATE '...'` syntax are Athena/Presto-specific and are not ANSI SQL portable. The
-`line_item_usage_account_id` column lets you trace attribution gaps back to the owning account across 50–200 accounts in a consolidated
-Organizations CUR dataset.
+`line_item_usage_account_id` is what lets this same query trace attribution gaps across 50–200
+accounts in a consolidated Organizations CUR dataset.
 
 ---
 
