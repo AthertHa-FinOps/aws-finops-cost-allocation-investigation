@@ -369,7 +369,8 @@ I filtered CloudTrail Event history to `RunInstances` and opened the full JSON e
 
 The `tagSpecificationSet` contained only the `Name` tag (`PROD-WEB-SERVER-01`). `Environment`,
 `Project`, and `Owner` were never submitted with the API call. Confirming the tags were absent at
-creation, not applied and later removed.
+creation, not applied and later removed.This distinction changed the remediation decision: the issue required a provisioning control improvement rather 
+than a cleanup process.
 
 **Data integrity check (Step 3):** the CloudTrail-recorded instance type (`t3.micro`) doesn't match
 the Cost and Usage Report (CUR) billed type (`t3.large`) for this same resource. In a live investigation 
