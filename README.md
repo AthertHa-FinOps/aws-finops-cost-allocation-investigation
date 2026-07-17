@@ -520,9 +520,9 @@ provisioning exist. Break-glass access, ad hoc scripts,
 incident-response console use |
 | **Selective SCP rollout** | Enforcement, after baseline | Applied org-wide only once exceptions are mapped. Applied too early it erodes engineering trust in every governance initiative that follows |
 
-A production SCP implementation would enforce required request tags at provisioning time, but only after the 
-organization has established a tagging baseline, 
-mapped exceptions, and validated required workflows.
+A production SCP implementation would enforce required request tags at provisioning time, but only after the organization has established a tagging 
+baseline, mapped exceptions, and validated required workflows. SCPs should be treated as permission boundaries rather than tagging systems themselves; 
+effective enforcement depends on IAM request conditions, supported AWS services, and exception management.
 
 Example enforcement sequence:
 
