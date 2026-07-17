@@ -196,6 +196,25 @@ Config was evaluated as an alternative but rejected. Full reasoning is in Append
 
 ---
 
+## Control Assessment Result
+
+| Control | Assessment |
+|---|---|
+| Mandatory cost allocation tagging | Failed |
+| Preventive enforcement at provisioning | Not implemented |
+| Detective monitoring | Implemented during remediation |
+| Ownership attribution | Failed due to identity governance gap |
+
+**Assessment:** The environment lacked a preventive tagging control at resource creation. 
+Resources could enter production without required cost allocation metadata, resulting in 
+unattributed spend and delayed Finance reconciliation.
+
+**Control maturity before remediation:** Manual detection only.
+
+**Control maturity after remediation:** Event-driven detective control with planned progressive enforcement.
+
+---
+
 ## Technical Investigation Summary
 
 | Phase | Objective | Outcome |
