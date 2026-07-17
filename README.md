@@ -409,18 +409,17 @@ federation context |
 
 ### Phase 4: Expanding Scope to S3
 
-**Objective:** Determine whether the issue was isolated or systemic.
+**Objective:** confirm whether this was isolated or systemic.
 
 | Service | Billed | Allocated | Gap |
 |---|---|---|---|
 | EC2 | $220 | $182 | ~$38 |
-| RDS | $60 | $60 | $0 (fully compliant) |
+| RDS | $60 | $60 | $0 |
 | S3 | $35 | $20 | $15 |
 
-EC2 had the largest gap, but S3 confirmed the issue was systemic. The two S3 buckets are shown with partial tags to illustrate a key
-compliance principle: partial tagging produces the same Finance-invisible result as no tagging. Both buckets are missing the required 
-`Environment` tag. Even with `Project` and `Owner` present, that one missing tag meant $15 per month in storage spend that Finance could not
-allocate to any cost centre.
+EC2 had the largest gap, but S3 confirmed the issue was systemic. Both non-compliant buckets had
+`Project` and `Owner` present but were missing `Environment`. A reminder that partial tagging
+produces the same Finance-invisible result as no tagging at all.
 
 | Resource ID | Monthly Cost | Environment | Project | Owner |
 |---|---|---|---|---|
@@ -428,24 +427,16 @@ allocate to any cost centre.
 | bucket-temp-data | $8.00 | NULL | web-app | team-engineering |
 | **TOTAL UNALLOCATED** | **$15.00** | | | |
 
-![S3 tag compliance audit via CUR showing bucket-logs-arch and bucket-temp-data with NULL Environment tags](screenshots/04%20-%20cur-s3-tag-
-compliance-audit.png)
+![S3 tag compliance audit via CUR showing NULL Environment tags](screenshots/04%20-%20cur-s3-tag-compliance-audit.png)
 
-> **Query reproduction note:** This screenshot uses a `VALUES` clause to simulate Athena output for the two non-compliant S3 buckets. The
-production query filters live CUR data by `line_item_product_code = 'AmazonS3'` and NULL `resource_tags_user_environment`, grouped by bucket
-resource ID.
-
-> **S3 tagging behaviour and temporal compliance window:** The S3 `CreateBucket` API does not accept tags inline the way EC2 does. Tags on
-S3 buckets are applied via a separate `PutBucketTagging` call after the bucket exists. This creates a temporal compliance window — a period
-between bucket creation and tag application during which the resource exists in a technically non-compliant state even if it will be
-correctly tagged within seconds. Point-in-time compliance snapshots will always show some S3 buckets as non-compliant even in well-governed
-environments. The production control design accounts for this: dual-event EventBridge monitoring (`CreateBucket` and `PutBucketTagging`) as
-the primary detection path, with a 15-minute delayed validation Lambda as a safety net for buckets where `PutBucketTagging` is never called.
-It is worth noting that this downstream detection approach is a compensating control, not a primary one. Many organisations address S3
-tagging upstream through Service Catalog products or IaC modules that enforce tags before bucket creation is permitted, which eliminates the
-compliance window entirely. One additional limit: S3 cost allocation operates at the bucket level. Object-level operations are not directly
-taggable, which can introduce granularity limits in fine-grained unit economics models where per-object or per-prefix attribution is
-required.
+**S3's asynchronous tagging behavior matters here.** S3's `CreateBucket` API doesn't accept tags
+inline the way EC2 does. Tags are applied afterward via `PutBucketTagging`. That creates a short
+window where a bucket exists in a technically non-compliant state even if it will be tagged
+correctly within seconds. The production control accounts for this with dual-event monitoring
+(`CreateBucket` and `PutBucketTagging`) plus a delayed validation Lambda as a safety net for
+buckets where tagging never happens. Many organizations solve this upstream instead, through
+Service Catalog products or IaC modules that enforce tags before a bucket can be created at all,
+which removes the window entirely.
 
 ---
 
