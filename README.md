@@ -591,83 +591,35 @@ lab build itself.
 
 ---
 
-### What I Would Do Next
+## What I Would Do Next
 
-**Days 1–30: Harden regional coverage**
-- Deploy EventBridge rule and Lambda to all active regions via IaC (Terraform or CloudFormation StackSets)
-- Deploy the 15-minute delayed validation Lambda as a safety net for buckets created but never tagged
-- Implement SQS and DLQ between EventBridge and Lambda for burst hardening
-- Stand up pipeline monitoring per Appendix D: regional rule audit, DLQ alarm, CloudTrail disruption alert, and monthly synthetic Slack test
+**Days 1–30:** deploy the rule and Lambda to all active regions via IaC, add the delayed
+validation Lambda for untagged S3 buckets, add an SQS/DLQ buffer for burst hardening, and stand up
+basic pipeline monitoring (regional rule audit, DLQ alarm, monthly synthetic alert test).
 
-**Days 31–60: Establish compliance baseline**
-- Centralize CUR across all accounts via AWS Organizations
-- Stand up a weekly tag compliance KPI (tagged spend / total spend) as a first-class FinOps metric
-- Begin tracking MTTR and repeat violation rate per team to validate that the feedback loop is changing behaviour
-- Deploy week-over-week Athena anomaly detection to alert Finance before monthly close
+**Days 31–60:** centralize Cost and Usage Report (CUR) across accounts, stand up a weekly tag-compliance KPI 
+as a
+first-class metric, and start tracking MTTR and repeat-violation rate per team.
 
-**Days 61–90: Enforce and optimize**
-- Introduce SCP guardrails for greenfield accounts once compliance exceeds 95%
-- Run EC2 rightsizing analysis against 2-week CloudWatch utilization windows
-- Deliver showback reporting to Finance and move to full chargeback once coverage is stable above 95%
-- Run Savings Plans coverage analysis filtered by `Environment` and `Project` tags
+**Days 61–90:** introduce SCP guardrails for greenfield accounts once compliance exceeds 95%, move
+Finance from showback to full chargeback, and run the rightsizing and Savings Plans analysis that
+attribution now makes possible (see Case Study 2).
 
 ---
 
 ## Lessons Learned
 
-- **Financial data needs to be treated as operational telemetry** because without real-time visibility, allocation failures persist until
-monthly close.
-- **Root cause at enterprise scale is rarely one failure.** The provisioning gap, the tag activation dependency, and the identity governance
-gap are three separate problems that happened to compound.
-- **Tagging governance must exist at the system level.** Human process alone cannot maintain reliable allocation coverage under deadline
-pressure.
-- **Detection is more effective than enforcement early in governance maturity.** Immediate feedback loops change behaviour faster than
-blocking deployments.
-- **Tag Policies standardize schema. They do not enforce compliance.** Understanding what each control tier actually does prevents mistaking
-visibility for protection.
-- **Attribution is the prerequisite for optimization.** Optimization applied to unattributed spend produces inaccurate projections and
-misaligned accountability.
-- **A governance pipeline that cannot detect its own failure modes is not a governance pipeline.** It is a false confidence generator.
-
----
-
-## Artifact Evolution and Production Hardening
-
-This portfolio documents a FinOps investigation across **multiple maturity stages**: initial detection, false-positive elimination, and 
-progressive enforcement. The following table reconciles the lab artifacts presented in screenshots with the production-hardened architecture
-described in the text.
-
-| Artifact | Lab State (Screenshot) | Production-Hardened State (Text) | Reason for Refinement |
-|---|---|---|---|
-| **CUR result panel (screenshot 02)** | Clean result output showing PROD-WEB-SERVER-01 with all three tags NULL | Same result produced by 
-live query against partitioned Parquet CUR | Isolates the forensic signal — simultaneous NULL across all three columns — from the query 
-mechanics shown in screenshot 03 |
-| **CUR resource verification (screenshot 03)** | Hardcoded `VALUES` clause simulating Athena output, shown alongside result | Live query 
-against partitioned Parquet CUR in S3 | Data sensitivity; live CUR contains account IDs, principal ARNs, and actual spend figures subject to
-least-privilege access controls |
-| **Instance type attribution** | `t3.micro` in CloudTrail vs. `t3.large` in CUR | Reconciliation protocol: CloudTrail = creation-time 
-source of truth; CUR = billing source of truth | Creation-time intent determines whether tags were submitted at provisioning; billing state
-determines cost impact. Discrepancies trigger secondary validation. |
-| **EventBridge rule events** | `RunInstances`, `CreateBucket` | `RunInstances`, `CreateBucket`, `PutBucketTagging` | S3 tags are applied 
-asynchronously via `PutBucketTagging`, not inline at `CreateBucket`. Validating at `CreateBucket` creates false positives. |
-| **Lambda S3 parsing** | `CreateBucket` trigger with lowercase keys (`tagging.tagSet.items`) | `PutBucketTagging` trigger with PascalCase
-keys (`Tagging.TagSet.Tag`) | Matches CloudTrail schema for S3 API events; eliminates false-positive alerts on every new bucket |
-| **Lambda test event** | Simulated IAM user (`developer-01`) | Test suite includes both standard-user and break-glass/Root scenarios | The
-forensic incident involved Root usage. Controls must handle disparate identity contexts including missing `sessionIssuer` chains. |
-| **Regional deployment** | Single-region rule (`us-east-1`) | Per-region IaC deployment via CloudFormation StackSets | EventBridge default
-buses are regional. Provisioning in an unmonitored region creates a silent compliance gap. |
-| **Lambda concurrency** | Direct invocation | SQS buffer with DLQ between EventBridge and Lambda | Provisioning bursts can exhaust the 
-1,000 concurrent execution limit, causing throttling and silent event loss. |
-
-### Why This Matters for Finance
-
-A FinOps control that cannot detect its own failure modes is not a control — it is a false confidence generator. The progression from lab to
-production requires explicit validation of each hardening step before Finance trusts the output. Alert credibility is a first-class design 
-requirement: if on-call engineers stop responding because of false positives, the governance model has failed regardless of whether the 
-Lambda executes correctly.
-
-The iterative approach shown here — ship detection fast, measure signal-to-noise, refine, then enforce — is how FinOps governance actually
-achieves adoption in Fortune 500 environments where Engineering trust is a prerequisite for compliance.
+- Financial data has to be treated as operational telemetry, without near-real-time visibility,
+  allocation failures sit undetected until month-end close.
+- Root causes at this scale are rarely isolated to a single failure. The provisioning gap, the tag-activation
+  dependency, and the identity gap are three separate problems that happened to compound.
+- Early in a governance program, rapid detection often changes behavior faster than broad enforcement.   
+  Immediate feedback beats a blocked deployment that just gets routed around.
+- Tag Policies standardize schema; they don't enforce anything. Knowing what each control tier
+  actually does is what keeps you from mistaking visibility for protection.
+- Attribution has to come before optimization. Sizing a rightsizing or Savings Plans
+  recommendation against unattributed spend just produces a wrong number with more confidence
+  behind it.
 
 ---
 
