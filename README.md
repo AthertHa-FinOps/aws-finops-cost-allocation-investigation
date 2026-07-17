@@ -100,7 +100,7 @@ Athena screenshots use representative values rather than live account identifier
 | Detection method | Manual monthly reconciliation | Automated event-driven detection |
 | Monthly unallocated spend | $53 | $0 |
 | Annualized attribution gap | $636 | $0 |
-| Finance reconciliation effort | ~4 hrs/month | Significantly reduced through automated detection workflow |
+| Finance reconciliation effort (manual) | ~4 hrs/month | Significantly reduced through automated detection workflow |
 | Chargeback accuracy | Incomplete | Restored to 100% for affected cost centres |
 
 †Lab-simulated outcome based on restored tag coverage; production impact is projected, not
@@ -169,9 +169,9 @@ EC2 RunInstances / S3 CreateBucket / S3 PutBucketTagging
              ▼
         AWS Lambda
    Checks: Environment · Project · Owner
-        │              │
-        ▼              ▼
-  Slack: Finance   Slack: Owner
+             │                          │
+             ▼                          ▼
+  Slack: Finance Channel)   Slack:  Resource Owner
 ```
 
 Config was evaluated as an alternative but rejected. Full reasoning is in Appendix B.
@@ -182,22 +182,17 @@ Config was evaluated as an alternative but rejected. Full reasoning is in Append
 
 | | |
 |---|---|
-| **Problem** | A 17% AWS cost allocation gap. Spend was billed correctly but missing required tags, making 
-it invisible to chargeback. |
-| **Investigation** | Cost and Usage Report (CUR) and Athena isolated the untagged spend; CloudTrail traced 
-the root cause to console-launched resources with no tags submitted at creation. |
-| **Root Cause** | No preventive tagging control at resource creation. Contributing factors: limited 
-identity attribution during provisioning, and a tag activation dependency that would have silently blocked 
-the investigation if cost allocation tags had not already been activated. |
-| **Solution** | Event-driven pipeline — CloudTrail → EventBridge → Lambda → Slack alerts to Finance and the 
-resource owner. |
-| **Result** | Allocation coverage restored to 100%. MTTD down to 1–5 minutes. Chargeback accuracy restored; 
-Finance reconciliation effort materially reduced. |
+| **Problem** | A 17% AWS cost allocation gap. Spend was billed correctly, but missing required tags made part of the month's spend invisible to Finance chargeback reporting. |
+| **Investigation** | Cost and Usage Report (CUR) data queried through Athena isolated the untagged resources. CloudTrail forensic analysis traced the root cause to console-launched resources where the required tags were never submitted during provisioning. |
+| **Root Cause** | No preventive tagging control existed at resource creation. Contributing factors included limited identity attribution during provisioning and a Cost Allocation Tag activation dependency that would have prevented this investigation had the tags not already been enabled. |
+| **Solution** | Implemented an event-driven detective control using CloudTrail, EventBridge, Lambda, and Slack notifications to Finance and the resource owner. |
+| **Result** | Allocation coverage restored to 100%. Mean Time to Detect (MTTD) reduced from approximately 30 days to 1–5 minutes. Finance reconciliation effort was significantly reduced while restoring chargeback accuracy. |
 
-**Operating model.** A control without clear ownership degrades over time. In production this
-would be split three ways: FinOps owns the pipeline and tracks MTTR and repeat-violation rate,
-Engineering owns remediation within an SLA, and Finance consumes the resulting data for
-chargeback and forecasting.
+**Operating model.** A governance control without defined ownership degrades over time. In production, responsibilities would be divided across three teams:
+
+- **FinOps** owns the monitoring pipeline and governance KPIs (MTTR, repeat-violation rate, compliance trends).
+- **Engineering** owns remediation of tagging violations within the agreed SLA.
+- **Finance** consumes validated allocation data for chargeback, forecasting, and reporting.
 
 ---
 
@@ -211,7 +206,7 @@ chargeback and forecasting.
 absent at creation, no attributable identity |
 | 4. Scope Expansion | Check for systemic exposure | Systemic gap confirmed across EC2 and S3 |
 | 5. Remediation | Prevent recurrence | Detection pipeline live and tested |
-| 6. Finance Reporting | Deliver executive output | Finance-ready report produced |
+| 6. Finance Reporting | Deliver executive output | Finance-ready governance report produced |
 
 ---
 
@@ -256,17 +251,16 @@ level.
 > `line_item_product_code` from live Cost and Usage Report (CUR) Parquet files and reconciles against the 
 > invoice PDF.
 
-### Phase 2: Resource Isolation (Cost and Usage Report(CUR) Analysis)
+### Phase 2: Resource Isolation (Cost and Usage Report (CUR) Analysis)
 
-I used CUR via Athena rather than Cost Explorer because it allows row-level tag inspection. Cost Explorer is 
-optimized for aggregated cost analysis, while CUR 
-provides the detailed row level tag and resource attribution data required for this investigation. Unblended 
-cost was used throughout to match Finance's 
-authoritative source of truth.
+I selected the Cost and Usage Report (CUR) queried through Athena rather than Cost Explorer because CUR provides row-level billing records with 
+individual resource tag columns. Cost Explorer is optimized for aggregated financial reporting, whereas CUR supports forensic investigation by 
+exposing detailed resource attribution data required for reconciliation. Unblended cost was used throughout because it aligns with Finance's 
+authoritative billing source of truth.
 
-Before running this analysis, `Environment`, `Project`, and `Owner` had to be activated as Cost Allocation 
-Tags in the Billing console. Otherwise those columns 
-wouldn't exist in the CUR schema, and the NULL tag queries would return no results.
+Before running this analysis, the `Environment`, `Project`, and `Owner` tags first had to be activated as AWS Cost Allocation Tags in the Billing 
+console. Without this prerequisite, those columns would not exist in the Cost and Usage Report (CUR) schema, causing NULL-tag analysis to return 
+incomplete results despite the tags existing on resources.
 
 ```sql
 SELECT
@@ -281,11 +275,10 @@ GROUP BY 1, 2, 3, 4
 ORDER BY total_cost DESC;
 ```
 
-**The turning point:** for resource `i-0c9cfb67280fe44ee`, every line item returned NULL across
-all three tag columns simultaneously. Not one missing tag, all three, consistently. A developer
-who forgot one tag wouldn't systematically omit all three across every billing line. That ruled
-out accidental omission, and shifted the question from "why is Finance missing cost" to "who
-created a resource that was never tagged at all", which is what sent me to CloudTrail.
+The turning point in the investigation came when resource `i-0c9cfb67280fe44ee` returned NULL values across all three required tag columns on every 
+billing record. A single missing tag could reasonably be attributed to human error. Three consistently missing tags across every CUR record strongly 
+indicated the resource had been provisioned without the organization's required tagging standard. That shifted the investigation from financial 
+reconciliation toward infrastructure forensics using CloudTrail.
 
 **Sample query output:**
 
