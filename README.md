@@ -81,9 +81,9 @@ forensics, root cause identification, and the design of an event driven detectiv
 > RunInstances API call, showed that the required tags were never included during provisioning. This 
 > confirmed the issue originated during provisioning rather than being caused by post creation tag removal.
 
-### A note on the screenshots
-
-The screenshots capture different stages of the investigation and control development. Where screenshots 
+>### A note on the screenshots
+>
+>The screenshots capture different stages of the investigation and control development. Where screenshots 
 reflect an earlier implementation, the accompanying text describes the final design and explains the changes 
 made during refinement.
 
@@ -91,87 +91,56 @@ Athena screenshots use representative values rather than live account identifier
 
 ---
 
-### Investigation Artifacts and Production Evolution
-
-The screenshots in this case study capture the **lab build and iterative refinement** of the detection pipeline. Where screenshots reflect 
-an earlier implementation state, the accompanying text documents the production-hardened architecture. This progression mirrors how FinOps 
-controls mature in enterprise environments: detection is shipped first to establish visibility, false positives are eliminated through 
-iterative hardening, and enforcement is applied only after the control has proven trustworthy to Finance.
-
-Data sensitivity considerations mean that Athena query screenshots use simulated values to illustrate result structure without exposing live
-account identifiers, principal ARNs, or production cost data. The SQL patterns are production-validated; the specific values are 
-representative.
-
----
-
 ## Results at a Glance
-
-**Simulated Remediation Impact**
 
 | Metric | Before | After |
 |---|---|---|
 | Allocation coverage | ~83% | 100% |
-| Mean time to detect (MTTD) | ~30 days | 1–3 minutes† |
+| Mean time to detect (MTTD) | ~30 days | 1–5 minutes† |
 | Detection method | Manual monthly reconciliation | Automated event-driven detection |
 | Monthly unallocated spend | $53 | $0 |
 | Annualized attribution gap | $636 | $0 |
-| Finance reconciliation effort | ~4 hrs/month | Materially reduced |
+| Finance reconciliation effort | ~4 hrs/month | Significantly reduced through automated detection workflow |
 | Chargeback accuracy | Incomplete | Restored to 100% for affected cost centres |
 
-†Lab-simulated outcomes based on restored tag coverage. Production impact is projected, not measured.
+†Lab-simulated outcome based on restored tag coverage; production impact is projected, not
+measured. End-to-end latency is bounded by CloudTrail delivery plus EventBridge propagation, which
+typically lands in the low-minute range but isn't a hard SLA.
 
-†End-to-end detection latency is bounded by CloudTrail delivery latency plus EventBridge propagation delay. Under normal conditions this 
-lands in the low-minute range. CloudTrail is not a real-time system and delivery can vary by region and load, so treat this as a typical 
-observed range rather than a hard SLA.
+This investigation addresses financial governance rather than cost reduction. AWS billed the spend 
+correctly. The governance failure was the inability to attribute costs accurately for chargeback, 
+forecasting, and financial accountability.
 
-**Forward KPIs (post-control, first-iteration baselines)**
+**Forward KPIs (post-control baselines):**
 
 | Metric | Target | Measurement Method |
 |---|---|---|
-| Mean time to remediate (MTTR) | Under 24 hrs from alert | Tag compliance restored timestamp from CUR or Config minus EventBridge alert 
+| Mean time to remediate (MTTR) | Under 24 hrs from alert | Tag compliance restored timestamp minus alert 
 timestamp |
-| Repeat violation rate | Below 10% within 30 days | Same principal ARN appearing in violation events within a rolling 30-day CloudTrail 
-window |
-| Compliance trend | 95% within 60 days | Weekly `tagged spend / total spend` from CUR, grouped by `line_item_usage_account_id` |
-| Tag validity rate | 90% within 60 days | Percentage of tag values matching allowed value sets defined in Tag Policies or a centralised 
-value registry; measures correctness, not just presence |
+| Repeat violation rate | Below 10% within 30 days | Same principal ARN reappearing in violation events 
+within a rolling 30-day window |
+| Compliance trend | 95% within 60 days | Weekly tagged spend / total spend from Cost and Usage Report 
+(CUR) |
+| Tag validity rate | 90% within 60 days | Percentage of tag values matching an allowed value set, not just 
+presence |
 
-> **Detection speed only creates value if action follows.** MTTD matters when paired with a clear ownership model and a remediation SLA. The
-lagging indicators that prove the control is working are MTTR and repeat violation rate. A compliance trend moving from 83% toward 95% over
-60 days is the metric Finance actually cares about. That is the threshold at which showback becomes chargeback and the governance model
-becomes self-sustaining.
-
-> **This is a financial risk problem, not a cost savings problem.** The spend was correctly billed. The failure was that Finance could not
-see it, attribute it, or charge it back. Unattributed spend affects three areas Finance leadership tracks directly: chargeback accuracy
-(cost assigned to the wrong team or not assigned at all), forecast reliability (budget models built on a spend baseline missing 17% of
-actual consumption), and commitment sizing (Savings Plans and RI coverage recommendations sized against incomplete data). Restoring
-allocation coverage corrects all three.
+Detection alone does not demonstrate an effective control. Sustainable governance also requires clear 
+ownership, defined remediation timelines, and measurable improvements through metrics such as MTTR, repeat 
+violation rate, and long term compliance trends.
 
 ---
 
 ## What This Demonstrates
 
-> **Project context:** This is a self-directed learning project completed in a personal AWS 
-> sandbox account, not a professional engagement or paid consulting work. Cost figures are 
-> intentionally lab-scaled ($315 in total spend) so the methodology could be tested end to end 
-> without financial risk. The investigation techniques, SQL patterns, and governance reasoning 
-> are written to map directly onto enterprise environments regardless of spend volume — that 
-> mapping is explained throughout the document.
-
 | Skill | Evidence |
 |---|---|
-| AWS CUR analysis with Athena | Phases 1–4: NULL tag filtering, row-level resource attribution |
-| CloudTrail forensic investigation | Phase 3: IAM principal, session attribution chain, UserAgent, tagSpecificationSet |
-| Control hierarchy reasoning | Control Hierarchy section: IaC enforces at design time, SCP/IAM enforce at runtime, Tag Policies standardize
-schema, EventBridge detects out-of-band behaviour |
-| Control selection and tradeoff reasoning | Appendix C: EventBridge vs Config on event fidelity and cost profile, detection vs SCP, what 
-was rejected and why |
-| Pipeline failure mode awareness | Appendix D: seven named failure modes with detection methods and alert targets |
-| Blast radius quantification | Enterprise Context section: $53 lab example translated to $10M/month spend impact |
-| Event-driven governance architecture | CloudTrail → EventBridge → Lambda pipeline with EC2 and S3 branching |
-| S3 temporal compliance window | Dual-event monitoring plus delayed validation Lambda to account for asynchronous tagging |
-| Finance-facing communication | Executive snapshot, AI-assisted report, chargeback sequencing |
-| Enterprise scale thinking | Multi-account CUR, Organizations SCP, regional deployment patterns |
+| Reconciling a system of record against reality | Phases 1–4: Cost and Usage (CUR) Report NULL-tag filtering, row-level resource attribution |
+| Audit-trail investigation | Phase 3: CloudTrail principal, identity chain, tagSpecificationSet |
+| Control hierarchy reasoning | Control Hierarchy section: what enforces at design time vs. runtime vs. detection |
+| Control selection and tradeoff reasoning | Appendix B: EventBridge vs. Config, detection vs. blocking, what was rejected and why |
+| Blast radius quantification | Enterprise Context: $53 lab example scaled to a $10M/month environment |
+| Finance-facing communication | Executive snapshot, AI-assisted formatting, chargeback sequencing |
+| Building and testing the fix, not just recommending it | Deployed pipeline with a passing end-to-end test |
 
 ---
 
