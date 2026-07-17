@@ -464,11 +464,10 @@ which removes the window entirely.
 
 ## Governance Decision
 
-The technical recommendation was not simply to purchase additional Savings Plans. The governance decision 
-depended on distinguishing sustained demand from a 
-temporary workload. Committing against a one time spike would improve short term utilization metrics but 
-increase long term financial risk if demand returned to 
-baseline.
+The technical recommendation was not simply to purchase additional Savings Plans. Commitment recommendations were treated as financial governance 
+decisions rather than purely optimization exercises because utilization risk, workload predictability, and ownership accountability affect the 
+decision. The analysis therefore focused on distinguishing sustained demand from a temporary workload. Committing against a one-time spike would 
+improve short-term utilization metrics but increase long-term financial risk if demand returned to baseline.
 
 The recommended approach was therefore to increase coverage conservatively while validating workload 
 recurrence with the data engineering team before expanding 
