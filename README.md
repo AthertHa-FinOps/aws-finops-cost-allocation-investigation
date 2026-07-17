@@ -516,42 +516,18 @@ The control decision is not whether enforcement is technically possible; it is d
 reduces risk rather than creating operational disruption.
 ---
 
-### Remediation and Controls
+## Remediation and Controls
 
-**Immediate correction:** Applied the missing tags so Finance could close the month accurately. No restatements required.
+**Immediate:** applied the missing tags manually so Finance could close the month accurately. No
+restatements required.
 
-**Permanent prevention (progressive enforcement model):**
+**Permanent, in progressive stages:**
+1. Tag Policies standardize required tag keys across accounts without blocking anything.
+2. EventBridge + Lambda detect violations within minutes and alert Finance and the resource owner.
+3. SCP guardrails enforce compliance for greenfield accounts once coverage stabilizes above 95%,
+   grandfathering existing workflows.
 
-1. **Tag Policies** standardize required tag keys across all accounts without blocking deployments
-2. **EventBridge + Lambda** detect violations within minutes of resource creation and alert Finance and the resource owner simultaneously
-3. **SCP guardrails** enforce compliance for greenfield accounts once the organization stabilizes above 95% coverage, grandfathering
-existing workflows to avoid pipeline disruption
-
-> **A control that is ignored is functionally nonexistent.**
-
-The control is designed to minimize false positives to preserve alert credibility and maintain response adherence. EC2 tags are validated 
-against the actual `tagSpecificationSet` submitted with the API call. S3 validation is deferred to `PutBucketTagging` rather than 
-`CreateBucket`, eliminating false-positive alerts on every new bucket regardless of its eventual tag state.
-
----
-
-### Organizational Rollout Note
-
-In a production deployment, a 24-hour remediation SLA would likely face resistance from engineering teams accustomed to longer security-
-ticket windows. The business case for urgency rests on accumulated unattributed spend: at the observed gap rate, a single team's untagged 
-resources compound to material budget variance within a quarter. A practical rollout sequence is a 48-hour grace period for teams actively 
-updating IaC modules to enforce tags at plan time, with the requirement that existing violations clear within 24 hours. Once pipeline 
-compliance reaches 100%, the grace period retires and repeat violation tracking begins against the IAM principal ARN. This framework 
-preserves alert credibility while giving teams a concrete path to compliance without immediate enforcement.
-
----
-
-### Step 1: EventBridge Rule
-
-The EventBridge rule `finops-tag-compliance-monitor` filters for `RunInstances` (EC2), `CreateBucket` (S3), and `PutBucketTagging` (S3 tag 
-validation) API calls via CloudTrail and targets the `finops-tag-validator` Lambda function.
-
-**EventBridge event pattern:**
+The EventBridge rule filters `RunInstances`, `CreateBucket`, and `PutBucketTagging`:
 
 ```json
 {
@@ -563,124 +539,33 @@ validation) API calls via CloudTrail and targets the `finops-tag-validator` Lamb
 }
 ```
 
-`PutBucketTagging` is included because S3 does not accept inline tags at bucket creation time. Tag validation must happen when tags are 
-actually applied, not at bucket creation, to avoid false-positive alerts on every new bucket.
+![EventBridge Rule finops-tag-compliance-monitor](screenshots/05a-eventbridge-rule.png)
 
-![EventBridge Rule finops-tag-compliance-monitor showing source aws.ec2 and aws.s3, RunInstances and CreateBucket event names, and finops-
-tag-validator Lambda target in us-east-1](screenshots/05a-eventbridge-rule.png)
+> The screenshot reflects an earlier build (`RunInstances` and `CreateBucket` only). S3 validation
+> was later moved to `PutBucketTagging` once I identified the temporal compliance window described
+> above — validating at `CreateBucket` would flag every new bucket as non-compliant regardless of
+> its eventual tag state.
 
-> **Pipeline evolution note:** The EventBridge rule screenshot reflects the EC2 and initial S3 detection phase (`RunInstances` and
-> `CreateBucket`). S3 validation was subsequently refined to trigger on `PutBucketTagging` rather than `CreateBucket` after identifying the
-temporal compliance window created by S3's asynchronous tagging model. The production event pattern includes all three event names:
-`RunInstances`, `CreateBucket`, and `PutBucketTagging`.
+The Lambda branches EC2 and S3 differently, since each service exposes tag data at a different
+point in its lifecycle — EC2 tags arrive inline with `RunInstances`, S3 tags arrive later via
+`PutBucketTagging`. Each alert carries the missing tags, the IAM principal ARN, account, and
+region, so the Finance channel gets notified immediately while the owner-routing logic resolves
+the responsible team separately.
 
-> **Production deployment pattern:** EventBridge default event buses are regional. A production deployment requires the rule in every active
-region. Two standard patterns handle this: per-region IaC deployment (Terraform or CloudFormation StackSets) for organizations with 3–5
-active regions; central event bus pattern forwarding regional CloudTrail events to a dedicated billing or security account for organizations
-managing 10 or more accounts.
+![Lambda function code](screenshots/05b%20-%20lambda-finops-tag-validator-code.png)
 
----
+> **Iteration note:** an earlier version of this Lambda tried to read S3 tags directly off the
+> `CreateBucket` event using lowercase keys, which doesn't work — `CreateBucket` doesn't carry
+> inline tags, and CloudTrail uses PascalCase for S3 parameters (`Tagging`, `TagSet`, `Tag`). The
+> version above fixes both issues. It's a small bug, but it's the kind that quietly generates false
+> positives on every single new bucket until someone notices engineers have started ignoring the
+> alert.
 
-### Step 2: Lambda Validation Logic
+![Lambda runtime settings confirming deployment](screenshots/05b-ii%20-%20lambda-settings.png)
 
-Lambda uses branching logic to handle EC2 and S3 differently, because the two services expose tag data at different points in their 
-lifecycle.
-
-> **Note on `boto3`:** In production, `boto3` retrieves the Slack webhook URL from AWS Secrets Manager. In this lab, alerts route to
-CloudWatch Logs via `print()`. The webhook URL must never be hardcoded.
-
-```python
-import json
-
-REQUIRED_TAGS = ['Environment', 'Project', 'Owner']
-
-def lambda_handler(event, context):
-    detail     = event['detail']
-    event_name = detail.get('eventName')
-    params     = detail.get('requestParameters', {})
-
-    if event_name == 'RunInstances':
-        # EC2: tags may be submitted inline at creation via tagSpecificationSet
-        tag_specs = params.get('tagSpecificationSet', {}).get('items', [])
-        tag_list  = []
-        for item in tag_specs:
-            tag_list += [t['key'] for t in item.get('tags', [])]
-        evaluate_and_alert(event, detail, event_name, tag_list)
-
-    elif event_name == 'CreateBucket':
-        # S3: CreateBucket never carries inline tags.
-        # Deferring to PutBucketTagging avoids false-positive alerts on every
-        # new bucket regardless of whether it will be tagged correctly.
-        pass
-
-    elif event_name == 'PutBucketTagging':
-        # S3: correct validation point for S3 tag compliance
-        tag_set  = params.get('Tagging', {}).get('TagSet', {}).get('Tag', [])
-        tag_list = [t['Key'] for t in tag_set] if isinstance(tag_set, list) else []
-        evaluate_and_alert(event, detail, event_name, tag_list)
-
-    return {'statusCode': 200}
-
-
-def evaluate_and_alert(event, detail, event_name, tag_list):
-    missing = [tag for tag in REQUIRED_TAGS if tag not in tag_list]
-    if missing:
-        message = {
-            'alert':         'FINOPS TAG COMPLIANCE VIOLATION',
-            'event':         event_name,
-            'missing_tags':  missing,
-            'iam_principal': detail.get('userIdentity', {}).get('arn'),
-            'account_id':    event.get('account'),
-            'region':        event.get('region'),
-        }
-        print(f"ALERT: {json.dumps(message, indent=2)}")
-    return missing
-```
-
-`REQUIRED_TAGS` is the single source of truth. Adding or removing a required tag means changing one line.
-
-> **Why the branching matters:** A single-path version using `tagSpecificationSet` for all events would flag every new S3 bucket as non-
-compliant. That key only exists in EC2 `RunInstances` payloads. The branched version avoids that entirely.
-
-> **Remaining S3 gap:** A bucket created but never receiving `PutBucketTagging` will never be evaluated by the event-driven path. The 15-
-minute delayed validation Lambda addresses this: it runs on a schedule, calls `ListBuckets` to enumerate recently created buckets and
-`GetBucketTagging` on each to retrieve current tag state, and re-alerts on any bucket that has passed the compliance window without the
-required tags. An AWS Config snapshot of S3 resource configuration is a viable alternative data source for organisations with Config already
-enabled, avoiding the per-API-call cost of `GetBucketTagging` at scale.
-
-![Lambda function finops-tag-validator showing REQUIRED_TAGS list, event parsing logic for RunInstances and CreateBucket, missing tag 
-detection, and alert payload construction](screenshots/05b%20-%20lambda-finops-tag-validator-code.png)
-
-> **Control refinement note:** The Lambda screenshot shows the v1 implementation, which attempted to read tags from the `CreateBucket` event
-using lowercase key names (`tagging`, `tagSet`, `items`). This approach produces false positives because S3 `CreateBucket` does not carry
-inline tags in the CloudTrail payload, and CloudTrail uses PascalCase (`Tagging`, `TagSet`, `Tag`) for S3 API parameters. The production-
-hardened code above defers S3 validation to `PutBucketTagging` and uses schema-correct PascalCase keys. This iteration demonstrates a core
-FinOps principle: a control that fires on expected behavior loses credibility and gets ignored, which is functionally equivalent to having
-no control.
-
-![Lambda runtime settings showing Python 3.14, handler lambda_function.lambda_handler, x86_64 architecture, and Lambda Deployed status 
-confirmed](screenshots/05b-ii%20-%20lambda-settings.png)
-
-> For high-volume burst scenarios, add SQS and DLQ between EventBridge and Lambda to handle concurrency spikes above the default 1,000
-concurrent execution limit per account per region.
-
-**Alert structure and ownership resolution.** Each alert payload carries the IAM principal ARN, account ID, region, event name, and list of
-missing tags. In production, the IAM principal ARN is the ownership resolution mechanism: it maps to the engineer or service identity 
-responsible for the provisioning action, which is then cross-referenced against a team directory or AWS SSO assignment to route the Slack DM
-to the correct owner. The Finance channel alert fires simultaneously and is not dependent on ownership resolution succeeding.
-
-**Escalation path.** If no remediation action is taken within the 24-hour SLA window, the owning team's manager is notified via a second-
-stage alert. Repeat violations by the same principal within 30 days trigger a governance review rather than another alert, to avoid 
-desensitisation.
-
----
-
-### Step 3: End-to-End Test Execution
-
-**CloudWatch log output (actual test execution):**
+**Test result — CloudWatch log output:**
 
 ```
-START RequestId: abb3cf8a-8c39-442d-ba6b-378ccd87444e Version: $LATEST
 ALERT: {
   "alert": "FINOPS TAG COMPLIANCE VIOLATION",
   "event": "RunInstances",
@@ -689,156 +574,20 @@ ALERT: {
   "account_id": "123456789012",
   "region": "us-east-1"
 }
-END RequestId: abb3cf8a-8c39-442d-ba6b-378ccd87444e
-REPORT RequestId: abb3cf8a-8c39-442d-ba6b-378ccd87444e
-Duration: 2.54 ms  |  Billed Duration: 259 ms  |  Init Duration: 255.90 ms
 ```
 
-**Result:** `statusCode: 200`, `missing_tags: ['Environment', 'Project', 'Owner']`
+![Lambda test result showing statusCode 200 and the missing-tags alert firing](screenshots/05c-lambda-test-result.png)
 
-![Lambda test result showing statusCode 200, missing_tags for Environment, Project, and Owner, and the FINOPS TAG COMPLIANCE VIOLATION alert 
-in the log output](screenshots/05c-lambda-test-result.png)
+**Escalation:** if remediation doesn't happen within the 24-hour SLA, the owning team's manager
+gets a second-stage alert. Repeat violations by the same principal within 30 days trigger a
+governance review rather than another alert, to avoid alert fatigue.
 
-> **Test event note:** The test event simulates a standard IAM user scenario (`developer-01`) to validate the Lambda execution path and
-alert payload structure. The actual Phase 3 forensic event involved a Root principal with no `sessionIssuer` chain. A production test suite
-would include both standard-user and break-glass/Root scenarios to ensure the alert payload correctly handles disparate identity contexts.
-
----
-
-## Enterprise Context and Scale
-
-### FinOps Lifecycle Alignment
-
-| Phase | Activity in This Investigation |
-|---|---|
-| **Inform** | CUR and Athena cost visibility, allocation coverage metric, invoice validation baseline |
-| **Optimize** | $53 per month in unattributed spend isolated across EC2 and S3; rightsizing path unlocked post-attribution |
-| **Operate** | Event-driven tagging compliance control, real-time Slack alerting, progressive enforcement model |
-
----
-
-### Blast Radius: What This Failure Looks Like at Scale
-
-The $53 gap in this lab is a methodology demonstration. The financial risk it represents is not.
-
-In an enterprise environment running $10M per month across 150 accounts and 8 regions, a 5% allocation failure rate produces $500,000 per 
-month in spend that Finance cannot see, attribute, or charge back. That is $6M annualized. At that scale, the failure is not a reporting
-gap. It is a strategic planning failure: budget models are wrong, team cost accountability is broken, Savings Plans commitments are sized
-against incomplete data, and anomaly detection produces false signals because the baseline is corrupted.
-
-The same CUR query structure, CloudTrail forensic chain, and EventBridge governance pipeline demonstrated here would surface and prevent 
-that gap in exactly the same way.
-
----
-
-### Multi-Account Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    AWS Organizations Root                       │
-│        SCP guardrails here, all accounts inherit control        │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-   ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-   │  Account A  │ │  Account B  │ │  Account C  │
-   │  (Prod)     │ │  (Dev)      │ │  (Staging)  │
-   └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
-          │               │               │
-          ▼               ▼               ▼
-   ┌─────────────────────────────────────────────┐
-   │            CloudTrail (All Accounts)        │
-   │     Centralized logging via Organizations   │
-   └─────────────────────┬───────────────────────┘
-                         ▼
-   ┌─────────────────────────────────────────────┐
-   │     Central S3: CUR and CloudTrail Logs     │
-   │   Partitioned by account_id and month       │
-   └──────────────┬──────────────────────────────┘
-                  │
-        ┌─────────┴──────────┐
-        ▼                    ▼
-┌──────────────┐    ┌───────────────────────────┐
-│ Athena SQL   │    │  EventBridge + Lambda     │
-│ Consolidated │    │  Deployed via IaC per     │
-│ CUR queries  │    │  account AND per region   │
-└──────────────┘    └────────────┬──────────────┘
-                                 ▼
-                      ┌──────────────────────┐
-                      │  Slack: Finance +    │
-                      │  Resource Owner      │
-                      └──────────────────────┘
-```
-
-**Four production considerations a sandbox does not surface:**
-
-- **Lambda concurrency:** Default limit is 1,000 per account per region. Add SQS and DLQ for burst hardening in environments with high-
-volume provisioning events.
-- **EventBridge rule limits:** 300 rules per event bus per account. Use dedicated buses at scale.
-- **CUR partition management:** 100+ accounts at $2M–$10M per month requires partitioning by account ID, service, and billing month to avoid
-expensive full-table Athena scans.
-- **Cost of the control itself:** CloudTrail data events carry a per-event charge and should be enabled selectively on high-value S3 buckets
-rather than account-wide. At 10,000 provisioning events per month the total pipeline cost is well under $5 — trivial relative to the
-allocation visibility it provides, but modelling it is the point in a FinOps context.
-
-**Multi-account CUR query structure.** In a consolidated Organizations CUR, the `line_item_usage_account_id` column is the primary partition
-key for cross-account attribution. A rollup query that identifies the top unallocated spend sources across all linked accounts:
-
-```sql
-SELECT
-    line_item_usage_account_id,
-    line_item_product_code,
-    COUNT(DISTINCT line_item_resource_id)    AS untagged_resource_count,
-    SUM(line_item_unblended_cost)            AS unallocated_spend,
-    SUM(SUM(line_item_unblended_cost)) OVER () AS total_spend,
-    ROUND(
-        100.0 * SUM(line_item_unblended_cost) /
-        SUM(SUM(line_item_unblended_cost)) OVER (),
-        2
-    )                                        AS pct_of_total
-FROM cur_database.consolidated_cur
-WHERE
-    line_item_line_item_type = 'Usage'
-    AND line_item_usage_start_date
-        BETWEEN DATE '2026-01-01' AND DATE '2026-01-31'
-    AND (
-        resource_tags_user_environment IS NULL
-        OR resource_tags_user_project  IS NULL
-        OR resource_tags_user_owner    IS NULL
-    )
-GROUP BY 1, 2
-ORDER BY unallocated_spend DESC;
-```
-
-This query partitions by payer account and product code. In a 50-account environment with multiple OU boundaries, the results drive account-
-level enforcement sequencing: accounts with the highest unallocated spend receive SCP guardrails first. Accounts below a materiality 
-threshold are addressed in a later enforcement wave to avoid disrupting low-spend development environments.
-
-**Tag schema normalization across accounts.** Before any compliance KPI is meaningful, tag key inconsistencies across accounts must be
-resolved. A common pattern in organisations without a centralised tag governance process is value drift: some accounts use `env`, others use 
-`environment`, others use `Environment`. All three resolve to different CUR columns and produce separate NULL patterns in the allocation
-query. The fix is a tag key normalisation step enforced through Tag Policies at the OU level and verified against CUR column presence before
-the compliance baseline is published.
-
-**Organisational rollout risk.** Legacy resources that predate the tagging standard cannot always be retagged without service disruption. 
-Shared infrastructure — VPCs, transit gateways, NAT gateways — is used by multiple teams and has no single owner; any chargeback model for 
-those resources requires an agreed allocation split before tagging can be meaningful. SCP and IAM enforcement rollout requires per-account
-or per-OU exception mapping that accounts for both categories before any blocking control is applied.
-
----
-
-### Optimization Opportunity (Sequential to Attribution, Not Parallel)
-
-With attribution restored, the data now supports a clear optimization path.
-
-**Rightsizing:** Pull 2-week CloudWatch CPU and memory utilization and downsize one tier for any resource consistently below 20% 
-utilization. Owner accountability is only possible because attribution is now complete.
-
-**Savings Plans:** Run Cost Explorer coverage report filtered by `Environment` and `Project` to identify commitment candidates. Before full
-tag coverage, any break-even modeling produced inaccurate recommendations.
-
-> Attribution must precede optimization. Rightsizing unattributed spend produces projections that land on the wrong teams.
+At production scale, the main things a sandbox doesn't surface are regional deployment (EventBridge
+rules are regional, so a rule has to be deployed to every active region), Lambda concurrency limits
+under bursty provisioning (solved with an SQS buffer and DLQ), and Cost and Usage Report (CUR) partition 
+management once
+you're past 100+ accounts. All three are addressed in the days-1-30 plan below rather than in the
+lab build itself.
 
 ---
 
