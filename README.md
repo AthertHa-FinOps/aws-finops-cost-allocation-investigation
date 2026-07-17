@@ -81,9 +81,9 @@ forensics, root cause identification, and the design of an event driven detectiv
 > RunInstances API call, showed that the required tags were never included during provisioning. This 
 > confirmed the issue originated during provisioning rather than being caused by post creation tag removal.
 
->### A note on the screenshots
->
->The screenshots capture different stages of the investigation and control development. Where screenshots 
+### A note on the screenshots
+
+The screenshots capture different stages of the investigation and control development. Where screenshots 
 reflect an earlier implementation, the accompanying text describes the final design and explains the changes 
 made during refinement.
 
@@ -146,39 +146,35 @@ violation rate, and long term compliance trends.
 
 ## Architecture
 
-**Pipeline flow:** EC2 or S3 resource creation triggers CloudTrail to capture the API call. EventBridge matches `RunInstances`, 
-`CreateBucket`, and `PutBucketTagging` events. Lambda validates `Environment`, `Project`, and `Owner` tags using service-specific branching
-logic. Slack alerts fire to the Finance channel and the resource owner simultaneously.
-
-> Config was evaluated but EventBridge was selected because it captures full request context including `tagSpecificationSet`, which Config
-cannot access at the API call layer. The detailed comparison is available on request.
+**Pipeline flow:** EC2 or S3 resource creation triggers CloudTrail to capture the API call.
+EventBridge matches `RunInstances`, `CreateBucket`, and `PutBucketTagging` events. A Lambda
+validates `Environment`, `Project`, and `Owner` tags, and alerts fire to Slack. The Finance
+channel and the resource owner, simultaneously.
 
 ![FinOps Architecture](screenshots/finops-architecture-v2.png)
 
-*Architecture diagram: end-to-end tag governance pipeline showing resource creation events, CloudTrail capture, EventBridge rule matching, 
-Lambda validation logic, and dual Slack alerting to Finance channel and resource owner. Impact metrics show MTTD reduced from 30 days to 
-under 5 minutes and coverage restored to 100%.*
+*End-to-end pipeline: resource creation, CloudTrail capture, EventBridge matching, Lambda
+validation, dual Slack alerting. MTTD reduced from 30 days to 1–5 minutes; coverage restored
+to 100%.*
 
 ```
 EC2 RunInstances / S3 CreateBucket / S3 PutBucketTagging
              │
              ▼
-       AWS CloudTrail
-    (all API-level events)
+        CloudTrail
              │
              ▼
     Amazon EventBridge
-  (finops-tag-compliance-monitor)
              │
              ▼
         AWS Lambda
-   (finops-tag-validator)
    Checks: Environment · Project · Owner
         │              │
         ▼              ▼
   Slack: Finance   Slack: Owner
-     Channel        Direct DM
 ```
+
+Config was evaluated as an alternative but rejected. Full reasoning is in Appendix B.
 
 ---
 
@@ -186,31 +182,36 @@ EC2 RunInstances / S3 CreateBucket / S3 PutBucketTagging
 
 | | |
 |---|---|
-| **Problem** | Finance identified a 17% AWS cost allocation gap. The spend was correctly billed but missing required allocation tags, which
-made it invisible to chargeback reports. |
-| **Investigation** | Used AWS CUR and Athena SQL to isolate untagged spend. Used CloudTrail forensic analysis to trace the root cause to
-resources launched via the AWS console without tags at creation. |
-| **Root Cause** | Primary failure: no preventive tagging control at resource creation time. Contributing factors: no attributable identity
-chain, removing accountability and making enforcement non-actionable; and tag activation dependency risk, which would have silently disabled 
-CUR-based investigation entirely if not already in place. |
-| **Solution** | Implemented an event-driven tagging compliance pipeline. CloudTrail feeds EventBridge, which triggers Lambda, which sends
-Slack alerts to Finance and the resource owner. |
-| **Result** | Allocation coverage restored to 100%. End-to-end MTTD reduced to low-minute level under normal conditions, bounded by 
-CloudTrail delivery and EventBridge propagation latency. This is not a hard SLA. Chargeback accuracy restored. Finance manual reconciliation
-effort materially reduced. |
+| **Problem** | A 17% AWS cost allocation gap. Spend was billed correctly but missing required tags, making 
+it invisible to chargeback. |
+| **Investigation** | Cost and Usage Report (CUR) and Athena isolated the untagged spend; CloudTrail traced 
+the root cause to console-launched resources with no tags submitted at creation. |
+| **Root Cause** | No preventive tagging control at resource creation. Contributing factors: limited 
+identity attribution during provisioning, and a tag activation dependency that would have silently blocked 
+the investigation if cost allocation tags had not already been activated. |
+| **Solution** | Event-driven pipeline — CloudTrail → EventBridge → Lambda → Slack alerts to Finance and the 
+resource owner. |
+| **Result** | Allocation coverage restored to 100%. MTTD down to 1–5 minutes. Chargeback accuracy restored; 
+Finance reconciliation effort materially reduced. |
 
-**Operating model considerations**
+**Operating model.** A control without clear ownership degrades over time. In production this
+would be split three ways: FinOps owns the pipeline and tracks MTTR and repeat-violation rate,
+Engineering owns remediation within an SLA, and Finance consumes the resulting data for
+chargeback and forecasting.
 
-A control without clear ownership tends to degrade over time. In production environments, this type of governance model is sustained through
-three aligned responsibilities:
+---
 
-- **FinOps** manages the detection pipeline and tracks the key metrics including allocation coverage, MTTR, and repeat violation rate while
-monitoring progression through governance maturity stages.
-- **Engineering teams** are responsible for remediation within defined SLAs, with alert attribution tied to the originating IAM principal.
-- **Finance** consumes the resulting allocation data for chargeback, forecasting, and commitment planning.
+## Technical Investigation Summary
 
-Operating cadence in mature environments includes monthly Finance reconciliation, weekly KPI review, and periodic compliance checkpoints to
-assess readiness for stronger enforcement controls.
+| Phase | Objective | Outcome |
+|---|---|---|
+| 1. Invoice Validation | Confirm billing accuracy | Billing error ruled out |
+| 2. Resource Isolation | Identify unallocated spend | EC2 and S3 gaps isolated |
+| 3. CloudTrail Forensics | Identify creation source and identity chain | Console launch confirmed, tags 
+absent at creation, no attributable identity |
+| 4. Scope Expansion | Check for systemic exposure | Systemic gap confirmed across EC2 and S3 |
+| 5. Remediation | Prevent recurrence | Detection pipeline live and tested |
+| 6. Finance Reporting | Deliver executive output | Finance-ready report produced |
 
 ---
 
@@ -218,37 +219,24 @@ assess readiness for stronger enforcement controls.
 
 | Layer | Technology |
 |---|---|
-| Billing data | AWS Cost and Usage Report (CUR) |
-| Query engine | Amazon Athena (Presto/SQL) |
-| Forensics | AWS CloudTrail |
+| Billing data | Cost and Usage Report (CUR) |
+| Query engine | Amazon Athena |
+| Forensics | CloudTrail |
 | Event capture | Amazon EventBridge |
-| Tag validation | AWS Lambda (Python 3.12+) |
+| Tag validation | AWS Lambda (Python) |
 | Governance | AWS Organizations Tag Policies, SCP |
-| Alerting | Slack (Finance channel and resource owner DM) |
-| Reporting | Anthropic Claude (AI-assisted formatting only; all findings produced by SQL and CloudTrail analysis) |
+| Alerting | Slack |
+| Reporting | (AI-assisted formatting only; findings produced by SQL and CloudTrail analysis) |
 
 ---
 
-## Investigation Summary
+## Technical Investigation
 
-| Phase | Objective | Tooling | Outcome |
-|---|---|---|---|
-| 1. Invoice Validation | Confirm billing accuracy | Cost Explorer, CUR | Billing error ruled out |
-| 2. Resource Isolation | Identify unallocated spend | Athena SQL (CUR) | EC2 and S3 gaps isolated |
-| 3. CloudTrail Forensics | Identify creation source, method, and identity chain | CloudTrail event history | Console launch confirmed, tags
-absent at creation, identity governance bypass confirmed |
-| 4. Scope Expansion | Check all services for systemic exposure | Athena SQL (CUR) | Systemic gap confirmed across EC2 and S3 |
-| 5. Remediation | Prevent recurrence | EventBridge, Lambda | Near-real-time detection live |
-| 6. Finance Reporting | Deliver executive output | Structured report with AI formatting | Finance-ready report produced |
+### Context
 
----
-
-## Investigation
-
-### Context and Problem Statement
-
-The investigation began at monthly reconciliation. Total AWS spend was $315. Spend visible with required tags was $262. That left $53 
-unallocated — roughly 17% of the total. The invoice was accurate. The failure was in cost attribution, not cost generation.
+The investigation began at monthly reconciliation. Total AWS spend was $315. Spend visible with
+required tags was $262, leaving $53, approximately 17%, unallocated. The invoice was accurate. The
+failure was in attribution, not billing.
 
 ---
 
