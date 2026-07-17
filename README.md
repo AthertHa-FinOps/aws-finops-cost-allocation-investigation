@@ -500,9 +500,8 @@ correct tags. Full reasoning in Appendix B.
 
 ## Control Hierarchy: Where Detection Fits
 
-This addresses the *detection* stage of a governance maturity model (Detect → Baseline →
-Stabilize → Enforce). Detection generally precedes broad enforcement, but not always. Many real
-environments already have baseline SCPs from day one (denying root usage, for example), and
+This addresses the *detection* stage of a governance maturity model (Visibility → Standardization → Detection → Prevention). Detection generally 
+precedes broad enforcement, but not always. Many real environments already have baseline SCPs from day one (denying root usage, for example), and
 scoped enforcement can coexist with detection early where the environment is well understood.
 
 | Layer | What it enforces | Notes |
