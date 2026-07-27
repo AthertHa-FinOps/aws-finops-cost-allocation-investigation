@@ -1,6 +1,6 @@
 # Cloud Cost Allocation Investigation: Tracing a 17% Chargeback Gap to Its Root Cause
 
-*Full technical report. For the shorter version, see [`README.md`](README.md).*
+*Full technical report. For the shorter version, see the [FinOps Cost Allocation Gap Summary](https://github.com/AthertHa-FinOps/finops-cost-allocation-gap-summary).*
 
 ---
 
